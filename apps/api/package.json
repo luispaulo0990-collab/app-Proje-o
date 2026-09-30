@@ -1,0 +1,51 @@
+{
+  "name": "@unita/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API REST /api/v1 \u2014 Painel de Obras Unit\u00e0",
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "dev": "tsx watch --conditions=development --env-file-if-exists=../../.env src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=../../.env dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --conditions=development --env-file-if-exists=../../.env src/database/migrate.ts",
+    "db:migrate:prod": "node --env-file-if-exists=../../.env dist/database/migrate.js",
+    "db:seed": "tsx --conditions=development --env-file-if-exists=../../.env src/database/seed.ts",
+    "demo": "tsx --conditions=development --env-file-if-exists=../../.env --env-file-if-exists=../../integracao-microsoft.txt src/demo.ts",
+    "integrations:sync-curves": "tsx --conditions=development --env-file-if-exists=../../.env src/integrations/sync-work-curves.ts",
+    "integrations:sync-curves:prod": "node --env-file-if-exists=../../.env dist/integrations/sync-work-curves.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.5",
+    "@fastify/swagger": "^9.9.0",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@node-rs/argon2": "^2.2.1",
+    "@unita/contracts": "0.1.0",
+    "@unita/engine": "0.1.0",
+    "drizzle-orm": "^0.45.3",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^5.0.1",
+    "fastify-type-provider-zod": "^7.0.0",
+    "jose": "^6.2.12",
+    "nodemailer": "^7.0.0",
+    "pg": "^8.23.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/nodemailer": "^7.0.0",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "pino-pretty": "^13.1.3",
+    "tsx": "^4.23.15"
+  }
+}

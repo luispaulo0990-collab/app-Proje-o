@@ -1,0 +1,25 @@
+{
+  "name": "@unita/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ProjectionEngine \u2014 motor de c\u00e1lculo determin\u00edstico, independente de UI, API e banco",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0"
+  }
+}

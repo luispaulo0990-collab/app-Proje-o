@@ -1,0 +1,62 @@
+/*
+ * Design tokens — Unità Engenharia. SINGLE SOURCE for colors, typography, spacing, radius,
+ * shadows. Tailwind utilities (bg-primary, text-ink-900, rounded-card…) are generated from
+ * these variables and `src/constants/tokens.ts` re-exposes them to TypeScript (charts).
+ * Never hard-code a color anywhere else.
+ */
+@theme static {
+  /* Brand — extracted from the official logo files */
+  --color-brand-orange: #fe5000; /* acento do "à" / símbolo un */
+  --color-brand-orange-line: #f05426; /* padrão gráfico "Diversos UN" */
+  --color-brand-black: #000000; /* logotipo UNITÀ */
+  --color-brand-ink: #231f20; /* símbolo un preto */
+
+  /* Semantic */
+  --color-primary: var(--color-brand-orange);
+  --color-primary-hover: #e04700;
+  --color-primary-soft: #fff1ea;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--color-brand-ink);
+  --color-secondary-foreground: #ffffff;
+
+  /* Neutral scale (warm, harmonises with the brand ink) */
+  --color-ink-50: #f8f7f6;
+  --color-ink-100: #f0eeec;
+  --color-ink-200: #e2dfdc;
+  --color-ink-300: #c9c4c0;
+  --color-ink-400: #a19b96;
+  --color-ink-500: #77716d;
+  --color-ink-600: #57524f;
+  --color-ink-700: #3d3937;
+  --color-ink-800: #2b2827;
+  --color-ink-900: #1a1817;
+
+  --color-background: var(--color-ink-50);
+  --color-surface: #ffffff;
+  --color-border: var(--color-ink-200);
+  --color-text: var(--color-ink-900);
+  --color-text-muted: var(--color-ink-500);
+
+  --color-success: #1e8a4c;
+  --color-success-soft: #e7f5ec;
+  --color-warning: #b7791f;
+  --color-warning-soft: #fdf4e3;
+  --color-error: #c62828;
+  --color-error-soft: #fdecec;
+  --color-info: #2563a8;
+  --color-info-soft: #e8f0fa;
+
+  /* Grid specific */
+  --color-cell-manual: #fff4d6;
+  --color-cell-current-period: #fff1ea;
+
+  /* Typography */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Radius & shadows */
+  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+  --shadow-card: 0 1px 2px rgb(26 24 23 / 0.06), 0 1px 3px rgb(26 24 23 / 0.08);
+  --shadow-overlay: 0 10px 30px rgb(26 24 23 / 0.18);
+}
