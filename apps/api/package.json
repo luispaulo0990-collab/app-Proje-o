@@ -15,6 +15,7 @@
     "db:migrate": "tsx --conditions=development --env-file-if-exists=../../.env src/database/migrate.ts",
     "db:migrate:prod": "node --env-file-if-exists=../../.env dist/database/migrate.js",
     "db:seed": "tsx --conditions=development --env-file-if-exists=../../.env src/database/seed.ts",
+    "db:seed:prod": "node --env-file-if-exists=../../.env dist/database/seed.js",
     "demo": "tsx --conditions=development --env-file-if-exists=../../.env --env-file-if-exists=../../integracao-microsoft.txt src/demo.ts",
     "integrations:sync-curves": "tsx --conditions=development --env-file-if-exists=../../.env src/integrations/sync-work-curves.ts",
     "integrations:sync-curves:prod": "node --env-file-if-exists=../../.env dist/integrations/sync-work-curves.js"
