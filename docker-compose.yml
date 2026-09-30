@@ -1,0 +1,14 @@
+# Banco local para desenvolvimento (opcional). Em produção o PostgreSQL roda na VPS.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: unita
+      POSTGRES_PASSWORD: unita_dev
+      POSTGRES_DB: unita
+    ports:
+      - '5432:5432'
+    volumes:
+      - unita_pg:/var/lib/postgresql/data
+volumes:
+  unita_pg:

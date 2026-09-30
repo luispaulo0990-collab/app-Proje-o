@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.demo-data
+# Credenciais locais da integração Microsoft (não versionar)
+integracao-microsoft.txt
