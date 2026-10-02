@@ -146,13 +146,6 @@ export function WorkFormPage() {
           >
             <Input inputMode="decimal" {...register('feeRatePct')} />
           </Field>
-          <Field
-            label="Defasagem do recebimento da taxa (meses)"
-            error={errors.feeLagMonths?.message}
-            hint="0 = recebe no mesmo mês do avanço físico."
-          >
-            <Input inputMode="numeric" {...register('feeLagMonths')} />
-          </Field>
           <Field label="Sistema construtivo" error={errors.constructionSystem?.message}>
             <Input list="systems" autoComplete="off" {...register('constructionSystem')} />
           </Field>

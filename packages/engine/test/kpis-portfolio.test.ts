@@ -15,7 +15,6 @@ const b = calculateProjection({
   curve: FLAT_4,
   budget: '400000.00',
   feeRate: '0.10',
-  feeLagMonths: 1,
 });
 
 describe('computeKpis', () => {
@@ -23,8 +22,9 @@ describe('computeKpis', () => {
     const k = computeKpis(a, '2026-12-01');
     expect(k).toMatchObject({
       feeProjected: '100000.00',
-      feeRealized: '50000.00',
-      feeRemaining: '50000.00',
+      // competência M−1: NOV/26 receives nothing, DEZ/26 receives the progress of NOV/26
+      feeRealized: '25000.00',
+      feeRemaining: '75000.00',
       physicalAccumulated: '0.50000000',
       physicalProjected: '1.00000000',
       elapsedMonths: 2,
@@ -59,22 +59,22 @@ describe('aggregatePortfolio', () => {
 
   it('totals fee per month and resets year-to-date in January', () => {
     expect(p.months.map((m) => m.feeTotal)).toEqual([
-      '25000.00',
+      '0.00',
       '25000.00',
       '25000.00',
       '35000.00',
-      '10000.00',
+      '35000.00',
       '10000.00',
       '10000.00',
     ]);
     expect(p.months.map((m) => m.feeYearToDate)).toEqual([
+      '0.00',
       '25000.00',
-      '50000.00',
       '25000.00',
       '60000.00',
-      '70000.00',
-      '80000.00',
-      '90000.00',
+      '95000.00',
+      '105000.00',
+      '115000.00',
     ]);
     expect(p.feeGrandTotal).toBe('140000.00');
   });

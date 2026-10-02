@@ -11,17 +11,13 @@ import {
   toDecimal,
   toFixedString,
 } from './decimal.js';
+import { distribute } from './distribution.js';
 import { EngineValidationError, issue } from './errors.js';
-import {
-  buildPeriods,
-  buildSchedule,
-  parseIsoDate,
-  parseIsoMonth,
-  toIsoMonth,
-} from './schedule.js';
+import { FEE_COMPETENCE_LAG_MONTHS, buildFeeSchedule } from './fee-schedule.js';
+import { buildPeriods, buildSchedule, parseIsoDate } from './schedule.js';
 import type {
   CellOrigin,
-  FeeRecalibration,
+  FeeAdjustment,
   ManualCell,
   Period,
   ProjectionCell,
@@ -32,18 +28,7 @@ import type {
   ValidationIssue,
 } from './types.js';
 
-export const MAX_FEE_LAG_MONTHS = 36;
-
-interface Distribution {
-  values: Decimal[];
-  manual: Set<number>;
-}
-
-function validateScalars(input: ProjectionInput): {
-  budget: Decimal;
-  feeRate: Decimal;
-  lag: number;
-} {
+function validateScalars(input: ProjectionInput): { budget: Decimal; feeRate: Decimal } {
   const issues: ValidationIssue[] = [];
   let budget = ZERO;
   let feeRate = ZERO;
@@ -64,17 +49,8 @@ function validateScalars(input: ProjectionInput): {
   } catch {
     issues.push(issue('INVALID_FEE_RATE', 'Taxa inválida.'));
   }
-  const lag = input.feeLagMonths ?? 0;
-  if (!Number.isInteger(lag) || lag < 0 || lag > MAX_FEE_LAG_MONTHS) {
-    issues.push(
-      issue(
-        'INVALID_FEE_LAG',
-        `A defasagem da taxa deve ser um inteiro entre 0 e ${MAX_FEE_LAG_MONTHS} meses.`,
-      ),
-    );
-  }
   if (issues.length > 0) throw new EngineValidationError(issues);
-  return { budget, feeRate, lag };
+  return { budget, feeRate };
 }
 
 function collectManual(
@@ -123,183 +99,38 @@ function collectManual(
   return map;
 }
 
-/**
- * Keeps manual cells and spreads what is left of `total` over the remaining cells,
- * proportionally to `weights`. Guarantees Σ = total whenever at least one free cell exists.
- */
-function distribute(
-  weights: readonly Decimal[],
-  manual: Map<number, Decimal>,
-  total: Decimal,
-  scale: number,
-  series: Series,
-  issues: ValidationIssue[],
-): Distribution {
-  const manualSum = sum([...manual.values()]);
-  if (manualSum.greaterThan(total)) {
-    issues.push(
-      issue(
-        'MANUAL_EXCEEDS_TOTAL',
-        `Os ajustes manuais (${manualSum.toString()}) ultrapassam o total da série ${series} (${total.toString()}).`,
-        {
-          series,
-        },
-      ),
-    );
-    return { values: weights.map(() => ZERO), manual: new Set(manual.keys()) };
-  }
-  const freeIdx = weights.map((_, i) => i).filter((i) => !manual.has(i));
-  const remaining = total.minus(manualSum);
-  const values = weights.map((_, i) => manual.get(i) ?? ZERO);
-
-  if (freeIdx.length === 0) {
-    if (!remaining.isZero()) {
-      issues.push(
-        issue(
-          'SERIES_TOTAL_MISMATCH',
-          `Todos os períodos da série ${series} são manuais e somam ${manualSum.toString()} (esperado ${total.toString()}).`,
-          { series },
-          'WARNING',
-        ),
-      );
-    }
-    return { values, manual: new Set(manual.keys()) };
-  }
-  const freeWeights = freeIdx.map((i) => weights[i] ?? ZERO);
-  if (sum(freeWeights).isZero() && remaining.greaterThan(0)) {
-    issues.push(
-      issue(
-        'REDISTRIBUTION_UNIFORM',
-        `A curva não possui peso nos períodos livres da série ${series}; o saldo foi distribuído igualmente.`,
-        { series },
-        'WARNING',
-      ),
-    );
-  }
-  allocateLargestRemainder(freeWeights, remaining, scale).forEach((v, k) => {
-    const idx = freeIdx[k];
-    if (idx !== undefined) values[idx] = v;
-  });
-  return { values, manual: new Set(manual.keys()) };
-}
-
-function parseRecalibration(
-  recal: FeeRecalibration,
-  issues: ValidationIssue[],
-): { fromMonth: string; remaining: Decimal } | null {
-  let fromMonth: string | null = null;
-  let remaining: Decimal | null = null;
-  try {
-    fromMonth = toIsoMonth(parseIsoMonth(recal.fromMonth));
-  } catch {
-    issues.push(
-      issue(
-        'INVALID_FEE_RECALIBRATION',
-        `Mês inicial do ajuste de taxa inválido: "${recal.fromMonth}".`,
-      ),
-    );
-  }
-  try {
-    remaining = toDecimal(recal.remainingTotal, 'ajuste de taxa');
-    if (remaining.isNegative()) {
-      issues.push(issue('INVALID_FEE_RECALIBRATION', 'O ajuste de taxa não pode ser negativo.'));
-      remaining = null;
-    } else if (remaining.decimalPlaces() > MONEY_SCALE) {
-      issues.push(
-        issue('INVALID_FEE_RECALIBRATION', 'O ajuste de taxa aceita no máximo 2 casas decimais.'),
-      );
-      remaining = null;
-    }
-  } catch {
-    issues.push(issue('INVALID_FEE_RECALIBRATION', 'Valor do ajuste de taxa inválido.'));
-  }
-  return fromMonth && remaining ? { fromMonth, remaining } : null;
-}
-
-/**
- * "Ajuste projeção de taxa": replaces Σ fee from `fromMonth` on by `remaining`, spread over
- * the months ≥ fromMonth proportionally to the (lagged) physical curve. Manual fee cells in
- * that window are kept and consume part of `remaining`. Months before `fromMonth` keep the
- * values of the regular distribution.
- */
-function recalibrateFee(
-  periods: readonly Period[],
-  weights: readonly Decimal[],
-  fee: Distribution,
-  manualFee: Map<number, Decimal>,
-  recal: { fromMonth: string; remaining: Decimal },
-  issues: ValidationIssue[],
-): Distribution {
-  const from = periods.findIndex((p) => p.month >= recal.fromMonth);
-  if (from < 0) {
-    issues.push(
-      issue(
-        'FEE_RECALIBRATION_OUT_OF_RANGE',
-        'Não há meses de taxa na projeção a partir do mês do ajuste — a obra já terminou de faturar.',
-        { fromMonth: recal.fromMonth },
-      ),
-    );
-    return fee;
-  }
-  const windowManual = new Map(
-    [...manualFee.entries()].filter(([i]) => i >= from).map(([i, v]) => [i - from, v] as const),
-  );
-  const manualSum = sum([...windowManual.values()]);
-  if (manualSum.greaterThan(recal.remaining)) {
-    issues.push(
-      issue(
-        'FEE_RECALIBRATION_BELOW_MANUAL',
-        `Os ajustes manuais de taxa a partir do mês do ajuste (${manualSum.toFixed(2)}) ultrapassam o valor informado (${recal.remaining.toFixed(2)}).`,
-      ),
-    );
-    return fee;
-  }
-  const window = distribute(
-    weights.slice(from),
-    windowManual,
-    recal.remaining,
-    MONEY_SCALE,
-    'FEE',
-    issues,
-  );
-  return { values: [...fee.values.slice(0, from), ...window.values], manual: fee.manual };
-}
-
-/** Σ fee expected with a recalibration: months before `fromMonth` as they are + remaining. */
-function expectedWithRecalibration(
-  periods: readonly Period[],
-  values: readonly Decimal[],
-  recal: { fromMonth: string; remaining: Decimal },
-): Decimal {
-  const before = periods.reduce(
-    (acc, p, i) => (p.month < recal.fromMonth ? acc.plus(values[i] ?? ZERO) : acc),
-    ZERO,
-  );
-  return before.plus(recal.remaining);
-}
-
 function shift(values: readonly Decimal[], lag: number): Decimal[] {
   return [...Array.from({ length: lag }, () => ZERO), ...values];
+}
+
+interface CellSeries {
+  values: readonly Decimal[];
+  manual: ReadonlySet<number>;
+  issued?: ReadonlySet<number>;
+}
+
+function originOf(series: CellSeries, i: number): CellOrigin {
+  if (series.issued?.has(i)) return 'ISSUED';
+  return series.manual.has(i) ? 'MANUAL' : 'CURVE';
 }
 
 function toCells(
   periods: readonly Period[],
   original: readonly Decimal[],
-  dist: Distribution,
+  series: CellSeries,
   scale: number,
 ): ProjectionCell[] {
   let running = ZERO;
   return periods.map((p, i) => {
-    const current = dist.values[i] ?? ZERO;
+    const current = series.values[i] ?? ZERO;
     running = running.plus(current);
-    const origin: CellOrigin = dist.manual.has(i) ? 'MANUAL' : 'CURVE';
     return {
       periodIndex: p.index,
       month: p.month,
       label: p.label,
       original: toFixedString(original[i] ?? ZERO, scale),
       current: toFixedString(current, scale),
-      origin,
+      origin: originOf(series, i),
       cumulative: toFixedString(running, scale),
     };
   });
@@ -312,14 +143,17 @@ function toCells(
  * 2. curve validated and resampled to the duration
  * 3. physical series (fractions, 8 decimals, Σ = 100%)
  * 4. manual cells preserved or discarded according to `mode`
- * 5. fee series = fee total × physical, shifted by `feeLagMonths` (2 decimals, Σ = total)
+ * 5. fee series = fee total × physical, received one month later (competência M−1)
+ * 6. from the first fee issuance on: invoiced values + INCC-corrected balance projected by the
+ *    curve (see buildFeeSchedule)
  */
 export function calculateProjection(input: ProjectionInput): ProjectionResult {
   const schedule = buildSchedule(input.startDate, input.durationMonths);
   assertValidCurve(input.curve);
-  const { budget, feeRate, lag } = validateScalars(input);
+  const { budget, feeRate } = validateScalars(input);
   const mode: RecalcMode = input.mode ?? 'PRESERVE_MANUAL';
   const duration = input.durationMonths;
+  const lag = FEE_COMPETENCE_LAG_MONTHS;
   const issues: ValidationIssue[] = [];
 
   const weights = resampleCurve(input.curve, duration);
@@ -335,18 +169,20 @@ export function calculateProjection(input: ProjectionInput): ProjectionResult {
   const feeTotal = roundTo(budget.times(feeRate), MONEY_SCALE);
   const feeOriginal = allocateLargestRemainder(shift(physicalOriginal, lag), feeTotal, MONEY_SCALE);
   const feeWeights = shift(physical.values, lag);
-  const baseFee = distribute(feeWeights, manualFee, feeTotal, MONEY_SCALE, 'FEE', issues);
 
   const { year, month } = parseIsoDate(input.startDate);
   const financialPeriods = buildPeriods({ year, month }, horizon);
-
-  const recal = input.feeRecalibration ? parseRecalibration(input.feeRecalibration, issues) : null;
-  const fee = recal
-    ? recalibrateFee(financialPeriods, feeWeights, baseFee, manualFee, recal, issues)
-    : baseFee;
-  const expectedFee = recal
-    ? expectedWithRecalibration(financialPeriods, fee.values, recal)
-    : feeTotal;
+  const fee = buildFeeSchedule(
+    {
+      periods: financialPeriods,
+      weights: feeWeights,
+      manual: manualFee,
+      feeTotal,
+      issuances: input.feeIssuances ?? [],
+      inccRates: input.inccRates ?? [],
+    },
+    issues,
+  );
 
   if (issues.some((i) => i.severity === 'ERROR')) {
     throw new EngineValidationError(issues.filter((i) => i.severity === 'ERROR'));
@@ -360,7 +196,7 @@ export function calculateProjection(input: ProjectionInput): ProjectionResult {
     totals: {
       physical: toFixedString(sum(physical.values), PCT_SCALE),
       fee: toFixedString(sum(fee.values), MONEY_SCALE),
-      expectedFee: toFixedString(expectedFee, MONEY_SCALE),
+      expectedFee: toFixedString(fee.expected, MONEY_SCALE),
     },
     parameters: {
       budget: toFixedString(budget, MONEY_SCALE),
@@ -368,12 +204,7 @@ export function calculateProjection(input: ProjectionInput): ProjectionResult {
       feeLagMonths: lag,
       mode,
       manualCount: physical.manual.size + fee.manual.size,
-      feeRecalibration: recal
-        ? {
-            fromMonth: recal.fromMonth,
-            remainingTotal: toFixedString(recal.remaining, MONEY_SCALE),
-          }
-        : null,
+      feeAdjustment: fee.adjustment,
     },
     validations: issues,
   };
@@ -400,9 +231,11 @@ export interface StoredProjection {
   durationMonths: number;
   budget: string;
   feeRate: string;
+  /** Lag used when the version was calculated (financial horizon = duration + lag). */
   feeLagMonths: number;
   mode?: RecalcMode;
-  feeRecalibration?: FeeRecalibration | null;
+  /** Issuance/INCC summary of the version; null = fee follows budget × rate. */
+  feeAdjustment?: FeeAdjustment | null;
   physical: readonly StoredCell[];
   fee: readonly StoredCell[];
 }
@@ -429,11 +262,13 @@ export function hydrateProjection(stored: StoredProjection): ProjectionResult {
     const byIndex = new Map(cells.map((c) => [c.periodIndex, c]));
     const original = periods.map((p) => toDecimal(byIndex.get(p.index)?.original ?? '0'));
     const values = periods.map((p) => toDecimal(byIndex.get(p.index)?.current ?? '0'));
-    const manual = new Set(
-      periods
-        .map((p, i) => (byIndex.get(p.index)?.origin === 'MANUAL' ? i : -1))
-        .filter((i) => i >= 0),
-    );
+    const positionsOf = (origin: CellOrigin) =>
+      new Set(
+        periods
+          .map((p, i) => (byIndex.get(p.index)?.origin === origin ? i : -1))
+          .filter((i) => i >= 0),
+      );
+    const manual = positionsOf('MANUAL');
     if (cells.length !== periods.length) {
       issues.push(
         issue(
@@ -445,7 +280,7 @@ export function hydrateProjection(stored: StoredProjection): ProjectionResult {
       );
     }
     return {
-      cells: toCells(periods, original, { values, manual }, scale),
+      cells: toCells(periods, original, { values, manual, issued: positionsOf('ISSUED') }, scale),
       total: sum(values),
       manualCount: manual.size,
     };
@@ -453,18 +288,9 @@ export function hydrateProjection(stored: StoredProjection): ProjectionResult {
 
   const physical = rebuild(schedule.periods, stored.physical, PCT_SCALE, 'PHYSICAL');
   const fee = rebuild(financialPeriods, stored.fee, MONEY_SCALE, 'FEE');
-  const storedRecal = stored.feeRecalibration
-    ? {
-        fromMonth: stored.feeRecalibration.fromMonth,
-        remaining: toDecimal(stored.feeRecalibration.remainingTotal),
-      }
-    : null;
-  const expectedFee = storedRecal
-    ? expectedWithRecalibration(
-        financialPeriods,
-        fee.cells.map((c) => toDecimal(c.current)),
-        storedRecal,
-      )
+  const adjustment = stored.feeAdjustment ?? null;
+  const expectedFee = adjustment
+    ? toDecimal(adjustment.expectedFee)
     : roundTo(toDecimal(stored.budget).times(stored.feeRate), MONEY_SCALE);
   if (!physical.total.equals(ONE)) {
     issues.push(
@@ -480,8 +306,8 @@ export function hydrateProjection(stored: StoredProjection): ProjectionResult {
     issues.push(
       issue(
         'SERIES_TOTAL_MISMATCH',
-        storedRecal
-          ? 'A taxa total difere do valor recalibrado.'
+        adjustment
+          ? 'A taxa total difere da taxa corrigida pelo INCC.'
           : 'A taxa total difere de orçamento × taxa.',
         { series: 'FEE' },
         'WARNING',
@@ -504,12 +330,7 @@ export function hydrateProjection(stored: StoredProjection): ProjectionResult {
       feeLagMonths: stored.feeLagMonths,
       mode: stored.mode ?? 'PRESERVE_MANUAL',
       manualCount: physical.manualCount + fee.manualCount,
-      feeRecalibration: storedRecal
-        ? {
-            fromMonth: storedRecal.fromMonth,
-            remainingTotal: toFixedString(storedRecal.remaining, MONEY_SCALE),
-          }
-        : null,
+      feeAdjustment: adjustment,
     },
     validations: issues,
   };

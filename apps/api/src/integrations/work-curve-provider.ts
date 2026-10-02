@@ -1,4 +1,4 @@
-import type { CumulativeEntry, ProgressEntry } from '@unita/engine';
+import type { CumulativeEntry, EconomicEntry, ProgressEntry } from '@unita/engine';
 
 /** One work's cumulative physical curve as reported by an external system. */
 export interface ExternalWorkCurve {
@@ -27,6 +27,20 @@ export interface WorkCurveProvider {
   /** Human-readable origin (sheet / endpoint) shown in reports. */
   readonly description: string;
   fetchCurves(): Promise<{ curves: ExternalWorkCurve[]; issues: ProviderReadIssue[] }>;
+}
+
+/** One work's monthly economic closings ("IEC Obra") as reported by an external system. */
+export interface ExternalEconomicSeries {
+  workName: string;
+  clientName: string | null;
+  entries: EconomicEntry[];
+}
+
+/** Port for systems that supply the economic closing of the works (Integration Layer). */
+export interface EconomicIndicatorProvider {
+  readonly source: string;
+  readonly description: string;
+  fetchEconomic(): Promise<{ series: ExternalEconomicSeries[]; issues: ProviderReadIssue[] }>;
 }
 
 /**

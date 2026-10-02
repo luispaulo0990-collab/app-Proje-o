@@ -58,5 +58,31 @@ export const curveSyncReportDto = z.object({
   /** Registered works that are absent from the sheet. */
   missingInSheet: z.array(z.object({ workId: uuid, workName: z.string() })),
   readIssues: z.array(z.object({ row: z.number().int(), message: z.string() })),
+  /** "IEC Obra" read from "BD_Econômico" (null = sheet not configured for this provider). */
+  economic: z
+    .object({
+      description: z.string(),
+      sheetWorks: z.number().int(),
+      /** Works whose closings were saved (or would be, in a simulation). */
+      saved: z.number().int(),
+      unchanged: z.number().int(),
+      items: z.array(
+        z.object({
+          workId: uuid,
+          workName: z.string(),
+          sheetName: z.string(),
+          match: z.enum(['EXACT', 'APPROXIMATE']),
+          months: z.number().int(),
+          /** Latest closing read (month / IEC / result), as in the sheet. */
+          lastMonth: z.string().nullable(),
+          lastIec: z.string().nullable(),
+          lastProjectedResult: z.string().nullable(),
+          outcome: z.enum(['SAVED', 'WOULD_SAVE', 'UNCHANGED']),
+        }),
+      ),
+      unmatched: z.array(z.string()),
+      readIssues: z.array(z.object({ row: z.number().int(), message: z.string() })),
+    })
+    .nullable(),
 });
 export type CurveSyncReportDto = z.infer<typeof curveSyncReportDto>;

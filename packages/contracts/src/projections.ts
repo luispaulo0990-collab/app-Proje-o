@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { decimalString, isoDate, uuid, validationIssue } from './common.js';
 
 export const seriesSchema = z.enum(['PHYSICAL', 'FEE']);
-export const cellOriginSchema = z.enum(['CURVE', 'MANUAL']);
+/** CURVE = engine · MANUAL = typed in the grid · ISSUED = fee invoiced in the month. */
+export const cellOriginSchema = z.enum(['CURVE', 'MANUAL', 'ISSUED']);
 export const recalcModeSchema = z.enum(['PRESERVE_MANUAL', 'REPLACE_MANUAL']);
 
 export const projectionCellDto = z.object({

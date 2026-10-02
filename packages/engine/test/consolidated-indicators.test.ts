@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  Decimal,
-  EngineValidationError,
   calculateProjection,
   computeProgressIndicators,
-  hydrateProjection,
   monthsIncurred,
   projectedEndMonth,
   type ProjectionInput,
 } from '../src/index.js';
-import { FLAT_4, UNITA_22, toPoints } from './fixtures.js';
-
-const sumOf = (cells: { current: string }[]) =>
-  cells.reduce((a, c) => a.plus(c.current), new Decimal(0)).toFixed(2);
-const sumFrom = (cells: { month: string; current: string }[], from: string) =>
-  sumOf(cells.filter((c) => c.month >= from));
+import { FLAT_4, toPoints } from './fixtures.js';
 
 const flat: ProjectionInput = {
   startDate: '2027-01-01',
@@ -22,112 +14,7 @@ const flat: ProjectionInput = {
   curve: FLAT_4,
   budget: '1000000.00',
   feeRate: '0.10',
-  feeLagMonths: 0,
 };
-
-describe('fee recalibration ("Ajuste projeção de taxa")', () => {
-  it('keeps months before the adjustment and spreads the new remaining by the curve', () => {
-    const r = calculateProjection({
-      ...flat,
-      feeRecalibration: { fromMonth: '2027-03-01', remainingTotal: '60000.00' },
-    });
-    expect(r.fee.map((c) => c.current)).toEqual(['25000.00', '25000.00', '30000.00', '30000.00']);
-    // `original` keeps what the curve alone produced (traceability of the recalibration).
-    expect(r.fee.map((c) => c.original)).toEqual(['25000.00', '25000.00', '25000.00', '25000.00']);
-    expect(r.fee.every((c) => c.origin === 'CURVE')).toBe(true);
-    expect(r.totals.fee).toBe('110000.00');
-    expect(r.totals.expectedFee).toBe('110000.00');
-    expect(r.parameters.feeRecalibration).toEqual({
-      fromMonth: '2027-03-01',
-      remainingTotal: '60000.00',
-    });
-  });
-
-  it('sums exactly to the informed value with the real 22-month curve and fee lag', () => {
-    const r = calculateProjection({
-      startDate: '2025-04-01',
-      durationMonths: 22,
-      curve: toPoints(UNITA_22),
-      budget: '44187790.05',
-      feeRate: '0.09',
-      feeLagMonths: 3,
-      feeRecalibration: { fromMonth: '2026-10-01', remainingTotal: '1234567.89' },
-    });
-    expect(sumFrom(r.fee, '2026-10-01')).toBe('1234567.89');
-    const before = r.fee.filter((c) => c.month < '2026-10-01');
-    expect(before.every((c) => c.current === c.original)).toBe(true);
-    expect(r.validations).toEqual([]);
-  });
-
-  it('accepts reducing the remaining to zero', () => {
-    const r = calculateProjection({
-      ...flat,
-      feeRecalibration: { fromMonth: '2027-02-01', remainingTotal: '0' },
-    });
-    expect(r.fee.map((c) => c.current)).toEqual(['25000.00', '0.00', '0.00', '0.00']);
-  });
-
-  it('keeps manual fee cells inside the window and distributes the rest', () => {
-    const r = calculateProjection({
-      ...flat,
-      manualCells: [{ series: 'FEE', periodIndex: 4, value: '10000' }],
-      feeRecalibration: { fromMonth: '2027-03-01', remainingTotal: '50000.00' },
-    });
-    expect(r.fee.map((c) => c.current).slice(2)).toEqual(['40000.00', '10000.00']);
-    expect(r.fee[3]?.origin).toBe('MANUAL');
-  });
-
-  it('rejects a window after the end of the fee horizon', () => {
-    expect(() =>
-      calculateProjection({
-        ...flat,
-        feeRecalibration: { fromMonth: '2027-05-01', remainingTotal: '1.00' },
-      }),
-    ).toThrow(EngineValidationError);
-  });
-
-  it('rejects negative values, more than 2 decimals and manual cells above the value', () => {
-    for (const remainingTotal of ['-1', '1.001']) {
-      expect(() =>
-        calculateProjection({
-          ...flat,
-          feeRecalibration: { fromMonth: '2027-02-01', remainingTotal },
-        }),
-      ).toThrow(EngineValidationError);
-    }
-    expect(() =>
-      calculateProjection({
-        ...flat,
-        manualCells: [{ series: 'FEE', periodIndex: 4, value: '20000' }],
-        feeRecalibration: { fromMonth: '2027-03-01', remainingTotal: '10000.00' },
-      }),
-    ).toThrow(/ultrapassam o valor informado/);
-  });
-
-  it('hydrates a recalibrated projection without total mismatch warnings', () => {
-    const feeRecalibration = { fromMonth: '2027-03-01', remainingTotal: '60000.00' };
-    const r = calculateProjection({ ...flat, feeRecalibration });
-    const toStored = (cells: typeof r.fee) =>
-      cells.map((c) => ({
-        periodIndex: c.periodIndex,
-        original: c.original,
-        current: c.current,
-        origin: c.origin,
-      }));
-    const h = hydrateProjection({
-      startDate: flat.startDate,
-      durationMonths: 4,
-      budget: flat.budget,
-      feeRate: flat.feeRate,
-      feeLagMonths: 0,
-      feeRecalibration,
-      physical: toStored(r.physical),
-      fee: toStored(r.fee),
-    });
-    expect(h.totals.expectedFee).toBe('110000.00');
-    expect(h.validations).toEqual([]);
-  });
-});
 
 describe('progress indicators (Consolidado)', () => {
   const entries = [

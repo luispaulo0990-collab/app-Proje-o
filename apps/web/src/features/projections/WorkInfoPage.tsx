@@ -15,7 +15,7 @@ export function WorkInfoPage() {
     ['Orçamento raso', formatCurrency(w.budget)],
     ['Taxa de administração', formatPercent(w.feeRate)],
     ['Taxa total prevista', formatCurrency(w.feeTotal)],
-    ['Defasagem do recebimento', `${w.feeLagMonths} mês(es)`],
+    ['Recebimento da taxa', 'Mês seguinte ao avanço (competência M−1)'],
     ['Sistema construtivo', w.constructionSystem],
     ['Curva', `${w.curve.name} — V${w.curve.version}`],
     ['Data inicial', formatDate(w.startDate)],

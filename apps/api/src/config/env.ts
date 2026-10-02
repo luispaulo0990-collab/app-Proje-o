@@ -56,6 +56,12 @@ const envSchema = z
       .trim()
       .default('Replanejado Atual Acumulado - Cliente'),
     MS_GRAPH_TARGET_COLUMN: z.string().trim().default('Meta Acumulada - Atual'),
+    /** "IEC Obra" of the Consolidado: sheet "BD_Econômico" (empty = do not read it). */
+    MS_GRAPH_SHEET_ECONOMICO: z.string().trim().default('BD_Econômico'),
+    MS_GRAPH_IEC_COLUMN: z.string().trim().default('IEC Obra'),
+    MS_GRAPH_PROJECTED_RESULT_COLUMN: z.string().trim().default('Resultado Projetado Obra'),
+    /** Value of the "Item" column that holds the work totals. */
+    MS_GRAPH_ECONOMICO_TOTAL_ITEM: z.string().trim().default('Geral'),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().int().default(465),
     SMTP_USER: z.string().optional(),
@@ -105,6 +111,13 @@ export interface GraphConfig {
   realizedColumn: string;
   clientReplannedColumn: string;
   targetColumn: string;
+  /** "BD_Econômico" sheet ("IEC Obra"); null = not read. */
+  economic: {
+    sheet: string;
+    iecColumn: string;
+    projectedResultColumn: string;
+    totalItem: string;
+  } | null;
 }
 
 export interface IntegrationKey {
@@ -152,6 +165,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
             realizedColumn: env.MS_GRAPH_REALIZED_COLUMN,
             clientReplannedColumn: env.MS_GRAPH_CLIENT_REPLANNED_COLUMN,
             targetColumn: env.MS_GRAPH_TARGET_COLUMN,
+            economic: env.MS_GRAPH_SHEET_ECONOMICO
+              ? {
+                  sheet: env.MS_GRAPH_SHEET_ECONOMICO,
+                  iecColumn: env.MS_GRAPH_IEC_COLUMN,
+                  projectedResultColumn: env.MS_GRAPH_PROJECTED_RESULT_COLUMN,
+                  totalItem: env.MS_GRAPH_ECONOMICO_TOTAL_ITEM,
+                }
+              : null,
           }
         : null,
     integrationKeys: splitList(env.INTEGRATION_API_KEYS).map((entry) => {

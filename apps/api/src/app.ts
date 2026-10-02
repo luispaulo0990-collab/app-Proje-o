@@ -19,6 +19,7 @@ import type { Database } from './database/client.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { JwtService } from './modules/auth/jwt.js';
 import { curvesRoutes } from './modules/curves/curves.routes.js';
+import { feeIssuancesRoutes, inccIndicesRoutes } from './modules/fees/fees.routes.js';
 import { integrationsRoutes } from './modules/integrations/integrations.routes.js';
 import { consolidatedInputsRoutes } from './modules/portfolio/consolidated-inputs.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
@@ -27,7 +28,10 @@ import { usersRoutes } from './modules/users/users.routes.js';
 import { actualCurveRoutes, workCurvesRoutes } from './modules/work-curves/work-curves.routes.js';
 import { clientsRoutes, worksRoutes } from './modules/works/works.routes.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
-import type { WorkCurveProvider } from './integrations/work-curve-provider.js';
+import type {
+  EconomicIndicatorProvider,
+  WorkCurveProvider,
+} from './integrations/work-curve-provider.js';
 import { createMailer, type Mailer } from './services/mailer.js';
 
 export interface BuildAppOptions {
@@ -36,6 +40,8 @@ export interface BuildAppOptions {
   mailer?: Mailer;
   /** Test seam for the own-curves integration (defaults to Microsoft Graph from env). */
   workCurveProvider?: WorkCurveProvider | null;
+  /** Test seam for the "IEC Obra" integration (defaults to Microsoft Graph from env). */
+  economicProvider?: EconomicIndicatorProvider | null;
 }
 
 /** Composition root: wires infrastructure, security plugins and versioned routes. */
@@ -44,6 +50,7 @@ export async function buildApp({
   db,
   mailer,
   workCurveProvider,
+  economicProvider,
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     trustProxy: env.TRUST_PROXY,
@@ -149,11 +156,14 @@ export async function buildApp({
       await v1.register(worksRoutes, { prefix: '/works' });
       await v1.register(actualCurveRoutes, { prefix: '/works' });
       await v1.register(consolidatedInputsRoutes, { prefix: '/works' });
+      await v1.register(feeIssuancesRoutes, { prefix: '/works' });
+      await v1.register(inccIndicesRoutes, { prefix: '/incc-indices' });
       await v1.register(workCurvesRoutes, { prefix: '/work-curves' });
       await v1.register(portfolioRoutes, { prefix: '/portfolio' });
       await v1.register(integrationsRoutes, {
         prefix: '/integrations',
         ...(workCurveProvider !== undefined ? { provider: workCurveProvider } : {}),
+        ...(economicProvider !== undefined ? { economicProvider } : {}),
       });
       await v1.register(curvesRoutes, { prefix: '/curves' });
       await v1.register(projectionsRoutes, { prefix: '/projections' });

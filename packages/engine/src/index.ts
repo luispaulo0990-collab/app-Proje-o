@@ -25,10 +25,10 @@ export {
   computeFeeTotal,
   hydrateProjection,
   listManualCells,
-  MAX_FEE_LAG_MONTHS,
   type StoredCell,
   type StoredProjection,
 } from './projection.js';
+export { FEE_COMPETENCE_LAG_MONTHS, buildFeeSchedule } from './fee-schedule.js';
 export { computeKpis, type ProjectionKpis } from './kpis.js';
 export {
   aggregatePortfolio,
@@ -73,3 +73,12 @@ export {
   type ProgressEntry,
   type ProgressIndicators,
 } from './work-indicators.js';
+export {
+  computeEconomicIndicators,
+  canonicalEconomicEntry,
+  isEconomicClosing,
+  IEC_SCALE,
+  type EconomicEntry,
+  type EconomicIndicators,
+} from './economic-indicators.js';
+export { INCC_INDEX_SCALE, inccRatesFromIndices, type InccIndex } from './incc.js';

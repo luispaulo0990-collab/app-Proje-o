@@ -72,14 +72,14 @@ Ex.: R$ 100,00 em 3 → 33,34 · 33,33 · 33,33.
 
 ```
 taxaTotal = round2(orçamento × taxa%)
-horizonte  = D + defasagem
-peso_{k+defasagem} = %físico_k       (meses 1..defasagem têm peso 0)
+horizonte  = D + 1
+peso_{k+1} = %físico_k       (o 1º mês tem peso 0)
 taxa_k     = distribuição (5) de taxaTotal pelos pesos
 ```
 
 Ex.: orçamento 44.187.790,05 × 9% = 3.976.901,1045 → **3.976.901,10**; mês com 0,4% → 15.907,60.
 
-A defasagem (`feeLagMonths`, 0–36) é configurável por obra — na planilha, a receita costuma começar 1–3 meses após o avanço.
+**Competência M−1** (regra fixa para todas as obras, decidida em 01/10/2026): a taxa emitida em um mês se refere ao avanço físico medido no mês anterior — recebe-se em outubro o que foi medido em setembro (`FEE_COMPETENCE_LAG_MONTHS = 1`). A antiga defasagem configurável por obra (`feeLagMonths`) deixou de existir.
 
 ## 8. Ajustes manuais e recálculo
 
@@ -100,7 +100,7 @@ Fluxo na aplicação: alterar parâmetros de cálculo de uma obra **sem** ajuste
 
 ## 9. Versionamento da projeção
 
-Toda geração, recálculo ou lote de edições cria uma nova versão imutável (`projections.version`), com snapshot dos parâmetros (orçamento, taxa, defasagem, datas, versão da curva, modo, versão do motor). Leituras reconstroem o resultado a partir dos valores gravados (`hydrateProjection`), sem recalcular — uma versão antiga permanece exatamente como foi calculada.
+Toda geração, recálculo ou lote de edições cria uma nova versão imutável (`projections.version`), com snapshot dos parâmetros (orçamento, taxa, competência, emissões/INCC aplicados, datas, versão da curva, modo, versão do motor). Leituras reconstroem o resultado a partir dos valores gravados (`hydrateProjection`), sem recalcular — uma versão antiga permanece exatamente como foi calculada.
 
 ## 10. KPIs e carteira
 
@@ -183,18 +183,54 @@ Cálculo em `packages/engine/src/work-indicators.ts`; a tela só formata. Mês d
 | Término projetado / duração          | 1º mês em que o acumulado físico atinge 100% (tolerância 1e-8); duração = meses do início ao término, inclusive.                                                                                                               |
 | Avanço ac. / mês                     | “Realizado Acumulado” do último mês ≤ referência. Mês = acumulado desse mês − acumulado do mês anterior; se não houver o mês anterior, só é calculado quando o mês é o início da obra (senão “—”).                             |
 | Status cliente                       | No último mês ≤ referência que tenha os dois valores: **Atrasada** se `Replanejado Atual Acumulado - Cliente` < `Meta Acumulada - Atual` (8 casas); senão **OK**. Desvio = replanejado − meta (p.p.). Sem dados → “Sem dados”. |
-| Taxa mês                             | Taxa da projeção vigente no mês de referência (orçamento × %taxa × curva, com defasagem e ajustes).                                                                                                                            |
+| Taxa mês                             | Taxa do mês de referência: valor emitido, se houver; senão a projeção (§7 e §15).                                                                                                                                              |
 | Taxa a receber                       | Σ taxa após o mês de referência.                                                                                                                                                                                               |
-| Ajuste projeção taxa                 | Valor informado pelo usuário (§15).                                                                                                                                                                                            |
+| Taxa emitida no mês                  | Valor faturado no mês de referência, informado pelo usuário ou por integração (§15).                                                                                                                                           |
 
-## 15. Ajuste projeção de taxa (recalibração)
+## 15. Taxa emitida e correção pelo INCC
 
-O usuário informa o **novo total de taxa a receber depois do mês de referência** (`remainingTotal`, R$ 2 casas, ≥ 0).
+Substitui o antigo “Ajuste projeção de taxa” (recalibração pelo saldo). Cálculo em `packages/engine/src/fee-schedule.ts` (`buildFeeSchedule`).
 
-1. `fromMonth` = referência + 1 mês. Meses anteriores a `fromMonth` não mudam.
-2. A partir de `fromMonth`, a taxa é redistribuída proporcionalmente ao avanço físico (com a defasagem) desses meses, pelo maior resto: Σ(taxa ≥ fromMonth) = `remainingTotal` exatamente. Sem peso nesses meses → distribuição igual (aviso).
-3. Ajustes manuais de taxa dentro da janela são preservados e consomem parte do valor; se passarem do valor → rejeita (`FEE_RECALIBRATION_BELOW_MANUAL`). Sem meses de taxa após a referência → rejeita (`FEE_RECALIBRATION_OUT_OF_RANGE`).
-4. Taxa total esperada passa a ser Σ(meses < fromMonth) + `remainingTotal` (a verificação “taxa ≠ orçamento × taxa” deixa de valer para essa versão).
-5. O ajuste é guardado em `fee_recalibrations` (histórico, 1 vigente por obra) e é **reaplicado automaticamente** em qualquer recálculo posterior (nova curva, edição de célula, alteração da obra) — `parameters.feeRecalibration` registra qual ajuste gerou cada versão.
-6. Células recalibradas mantêm `origin = CURVE`; `original` guarda o valor da curva sem ajuste (rastreabilidade).
-7. Remover o ajuste gera nova versão com a taxa voltando a orçamento × %taxa. Toda gravação/remoção entra no histórico (`FEE_RECALIBRATION`, `FEE_RECALIBRATION_CLEARED`).
+**Entradas**
+
+- **Taxa emitida** (`fee_issuances`, por obra e mês, R$ 2 casas, ≥ 0): valor faturado no mês. Pela competência M−1 (§7), refere-se ao avanço do mês anterior.
+- **INCC mensal** (`incc_indices`, global): desde 02/10/2026 o cadastro é o **número-índice do mês** (ex.: INCC-DI de AGO/26 = 1.296,889; 6 casas). O motor deriva a variação: `INCC(M) = round8(índice(M) ÷ índice(M−1) − 1)` (HALF_EVEN, `inccRatesFromIndices`); sem índice de M−1 não há variação em M (1º mês do histórico ou lacuna). **O INCC do mês M−1 corrige o saldo a receber em M** (o INCC de setembro corrige outubro). Histórico carregado: INCC-DI (FGV), AGO/1994 → AGO/2026 (385 meses, `INCC-DI.xlsx` aba Plan1), inserido só nos meses ainda não cadastrados.
+
+**Regra** — sem nenhuma emissão, a taxa segue a §7 (orçamento × %taxa pela curva) e o INCC não é aplicado. Com emissões, sendo A o primeiro e L o último mês com emissão:
+
+1. Meses antes de A mantêm a distribuição normal da curva. `saldo = taxa total − Σ(meses antes de A)`.
+2. Para cada mês M de A até L, em ordem: `saldo = round2(saldo × (1 + INCC(M−1)))` (HALF_EVEN; só sobre saldo positivo e só se o INCC de M−1 estiver cadastrado); `taxa(M) = valor emitido em M` — mês sem emissão dentro dessa janela foi faturado em **0** —; `saldo −= taxa(M)`.
+3. INCC já publicado para os meses logo após L (sequência contínua de meses cadastrados) também corrige o saldo antes da projeção.
+4. O saldo é projetado nos meses depois de L pelo avanço físico (competência M−1), pelo maior resto, preservando ajustes manuais de taxa: Σ(taxa após L) = saldo exatamente.
+5. **Taxa prevista** = taxa contratual + Σ correções do INCC. Recebida + A receber = Taxa prevista, centavo a centavo.
+
+Ex.: taxa 100.000,00, curva 4 × 25%. INCC de JAN = 1%, emissão de FEV = 25.000,00 → em FEV: 100.000 × 1,01 = 101.000 − 25.000 = **76.000** a receber, projetados em MAR/ABR/MAI (25.333,34 · 25.333,33 · 25.333,33).
+
+**Avisos e rejeições**
+
+| Código                      | Situação                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `FEE_ISSUANCE_OUT_OF_RANGE` | Emissão fora do período de recebimento da obra → rejeita (422, nada é gravado). |
+| `INVALID_FEE_ISSUANCE`      | Valor negativo, mais de 2 casas ou mês inválido → rejeita.                      |
+| `INVALID_INCC_RATE`         | INCC ≤ −100% ou inválido → rejeita.                                             |
+| `FEE_MANUAL_SUPERSEDED`     | Ajuste manual de taxa em mês com emissão: o valor emitido prevalece (aviso).    |
+| `FEE_ISSUED_ABOVE_BALANCE`  | Emissões acima da taxa corrigida: nada resta a projetar (aviso).                |
+| `FEE_BALANCE_UNALLOCATED`   | Sobrou saldo depois do último mês de recebimento da projeção (aviso).           |
+
+**Rastreabilidade**
+
+- Células emitidas têm `origin = ISSUED` (verde na grade); `original` guarda o valor que a curva daria. Não podem ser editadas na grade da projeção — o valor é alterado na coluna “Taxa emitida no mês” do Consolidado.
+- Cada emissão, alteração ou remoção (`FEE_ISSUANCE`, `FEE_ISSUANCE_REMOVED`) gera nova versão da projeção e entra no histórico da obra. Cada INCC salvo, importado em lote ou removido (`INCC_SET`, `INCC_IMPORT`, `INCC_REMOVED`) recalcula todas as obras com emissão, com um registro de recálculo no histórico de cada uma.
+- `parameters.feeAdjustment` de cada versão guarda o resumo aplicado: 1º/último mês emitido, total emitido, correção do INCC, saldo após a última emissão e taxa prevista.
+- Emissões e INCC podem ser enviados por sistemas externos (`X-Api-Key`): `PUT /works/:id/fee-issuances/:mes`, `PUT /incc-indices/:mes` (ou `PUT /incc-indices` em lote).
+- Atualização das versões antigas (motor 0.2.0, com defasagem configurável ou recalibração): ao aplicar as migrations, cada projeção corrente é recalculada uma única vez com as regras atuais, preservando os ajustes manuais e registrando “Atualização das regras de taxa” no histórico. Os ajustes antigos continuam visíveis no histórico.
+
+## 16. IEC Obra (aba “BD_Econômico”)
+
+Definido em 02/10/2026.
+
+- **Fonte:** aba `BD_Econômico` de `Consolidado Físico - Obras.xlsx`, somente a linha cujo **Item = “Geral”** de cada obra e mês (as demais linhas são itens de orçamento). Colunas lidas: `Nome da Obra`, `Mês do Fechamento`, `IEC Obra` e `Resultado Projetado Obra`; `Nome Cliente + Obra` serve para separar obras de mesmo nome.
+- **Casamento:** mesmas regras das curvas próprias (nome padrão cadastrado; nome com marca/cliente = APROXIMADO, conferir na simulação).
+- **Canonização:** IEC com 6 casas (`1.020000`), resultado em R$ com 2 casas, arredondamento half-even. **IEC = 0 é tratado como “sem IEC”** e um mês com IEC 0 e resultado 0 não é um fechamento (a planilha publica zeros antes do fechamento).
+- **Consolidado:** coluna “IEC obra / resultado” mostra o **último fechamento com mês ≤ mês de referência** (`computeEconomicIndicators`, motor): índice em cima, resultado projetado embaixo (vermelho quando negativo). Sem fechamento → “Aguardando API”.
+- **Sincronização:** roda junto com “Simular / Importar” das curvas; erro de leitura da aba BD_Econômico vira aviso no relatório e não bloqueia as curvas. Também é aceito pelo endpoint genérico `PUT /works/:id/economic-indicators`.

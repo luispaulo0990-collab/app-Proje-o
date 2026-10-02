@@ -29,7 +29,6 @@ async function createWork(patch: Record<string, unknown>) {
       units: 100,
       budget: '1000000.00',
       feeRate: '0.10',
-      feeLagMonths: 0,
       constructionSystem: 'Alvenaria Estrutural',
       curveVersionId,
       startDate: '2025-01-01',
@@ -207,7 +206,11 @@ describe('GET /work-curves', () => {
     const own = await createWork({ name: 'Com curva própria' });
     await putActual(own, { source: 'ERP', points: OWN_10 });
 
-    const res = await ctx.app.inject({ url: '/api/v1/work-curves', headers: auth(viewer) });
+    // Fixed reference: the figures below must not depend on the current month.
+    const res = await ctx.app.inject({
+      url: '/api/v1/work-curves?referenceDate=2026-09-15',
+      headers: auth(viewer),
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     const byId = new Map(body.items.map((i: { workId: string }) => [i.workId, i]));

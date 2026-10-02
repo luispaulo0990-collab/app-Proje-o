@@ -1,6 +1,7 @@
 import type { ProjectionCellDto } from '@unita/contracts';
 import { formatCurrency, formatPercent } from '@/utils/format';
 import { cn } from '@/utils/cn';
+import { CELL_ORIGIN } from './cellOrigin';
 
 interface Row {
   label: string;
@@ -98,19 +99,20 @@ export function ProjectionPreviewGrid({
               </td>
               {months.map((m) => {
                 const cell = lookup(row, m.month);
-                const manual = cell?.origin === 'MANUAL';
+                const highlight = cell ? CELL_ORIGIN[cell.origin] : undefined;
+                const curve =
+                  cell &&
+                  (row.cells === physical
+                    ? formatPercent(cell.original)
+                    : formatCurrency(cell.original));
                 return (
                   <td
                     key={m.month}
-                    title={
-                      manual
-                        ? `Ajuste manual · curva: ${row.cells === physical ? formatPercent(cell.original) : formatCurrency(cell.original)}`
-                        : undefined
-                    }
+                    title={highlight ? `${highlight.title} · curva: ${curve}` : undefined}
                     className={cn(
                       'whitespace-nowrap border-b border-border px-3 py-2 text-right group-hover:bg-ink-50',
-                      manual && 'bg-cell-manual',
-                      m.month === referenceMonth && !manual && 'bg-cell-current-period/60',
+                      highlight?.className,
+                      m.month === referenceMonth && !highlight && 'bg-cell-current-period/60',
                       !row.strong && 'text-text-muted',
                     )}
                   >

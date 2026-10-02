@@ -1,6 +1,8 @@
 import { canonicalizeCurve, curveFromCumulative } from '@unita/engine';
 import { hashPassword } from '../modules/auth/crypto.js';
 import type { Db } from './client.js';
+import { regenerateWorksWithIssuances } from '../modules/fees/fees.service.js';
+import { loadInccHistory } from './incc-history.js';
 import { importPainelWorks } from './painel-import.js';
 import { curvesRepository } from './repositories/curves.repository.js';
 import { usersRepository } from './repositories/users.repository.js';
@@ -92,6 +94,17 @@ export async function seedDatabase(db: Db, options: SeedOptions = {}): Promise<v
       canonicalizeCurve(LINEAR_12),
     );
     log('Curvas padrão disponíveis.');
+
+    const incc = await loadInccHistory(db);
+    if (incc > 0) {
+      // New months of INCC change the corrected balance of works that already have issuances.
+      const works = await regenerateWorksWithIssuances(
+        db,
+        { user: null, integration: 'carga:incc-di' },
+        `Histórico INCC-DI carregado (${incc} meses)`,
+      );
+      log(`INCC-DI: ${incc} mês(es) de histórico carregado(s); ${works} obra(s) recalculada(s).`);
+    }
 
     if (options.sampleWorks) {
       // Real portfolio from "Painel de obras.xlsx" (aba Painel (2)); replaces old fictitious samples.

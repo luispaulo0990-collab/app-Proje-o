@@ -8,7 +8,8 @@ export type IsoDate = string;
 export type IsoMonth = string;
 
 export type Series = 'PHYSICAL' | 'FEE';
-export type CellOrigin = 'CURVE' | 'MANUAL';
+/** CURVE = engine · MANUAL = typed in the grid · ISSUED = fee invoiced in the month. */
+export type CellOrigin = 'CURVE' | 'MANUAL' | 'ISSUED';
 export type RecalcMode = 'PRESERVE_MANUAL' | 'REPLACE_MANUAL';
 export type Severity = 'ERROR' | 'WARNING';
 
@@ -54,15 +55,31 @@ export interface ManualCell {
   value: DecimalString;
 }
 
-/**
- * "Ajuste projeção de taxa": the user recalibrates what is still to be received. From
- * `fromMonth` (inclusive) on, the fee cells must add up to `remainingTotal`, spread by the
- * physical curve of those months. Months before `fromMonth` are not touched.
- */
-export interface FeeRecalibration {
-  fromMonth: IsoMonth;
-  /** New Σ fee (R$, 2 decimals) from `fromMonth` to the end of the financial horizon. */
-  remainingTotal: DecimalString;
+/** Fee actually invoiced for a work in a month ("taxa emitida"). */
+export interface FeeIssuance {
+  month: IsoMonth;
+  /** R$, 2 decimals, ≥ 0. */
+  amount: DecimalString;
+}
+
+/** Monthly INCC variation of a competence month (0.0052 = 0,52%); it corrects the next month. */
+export interface InccRate {
+  month: IsoMonth;
+  rate: DecimalString;
+}
+
+/** How issuances and INCC changed the fee of a work (persisted with each version). */
+export interface FeeAdjustment {
+  firstIssuedMonth: IsoMonth;
+  lastIssuedMonth: IsoMonth;
+  /** Σ issued (R$). */
+  issuedTotal: DecimalString;
+  /** Σ INCC corrections applied to the balance (R$). */
+  inccCorrection: DecimalString;
+  /** Balance still to be received after the last issuance, already corrected (R$). */
+  balanceAfterIssued: DecimalString;
+  /** Contract fee + INCC corrections (R$). */
+  expectedFee: DecimalString;
 }
 
 export interface ProjectionInput {
@@ -73,13 +90,13 @@ export interface ProjectionInput {
   budget: DecimalString;
   /** Taxa de administração as a fraction (0.10 = 10%). */
   feeRate: DecimalString;
-  /** Months between physical progress and fee receipt. Default 0. */
-  feeLagMonths?: number;
   manualCells?: readonly ManualCell[];
   /** Default PRESERVE_MANUAL. */
   mode?: RecalcMode;
-  /** Optional recalibration of the fee still to be received. */
-  feeRecalibration?: FeeRecalibration | null;
+  /** Fee invoiced month by month; drives the fee series from the first issuance on. */
+  feeIssuances?: readonly FeeIssuance[];
+  /** INCC variations; INCC of M−1 corrects the balance to be received in M. */
+  inccRates?: readonly InccRate[];
 }
 
 export interface ProjectionCell {
@@ -96,7 +113,7 @@ export interface ProjectionCell {
 
 export interface ProjectionResult {
   schedule: Schedule;
-  /** Financial horizon = duration + fee lag. */
+  /** Financial horizon = duration + competence lag (1 month). */
   financialPeriods: Period[];
   physical: ProjectionCell[];
   fee: ProjectionCell[];
@@ -111,7 +128,7 @@ export interface ProjectionResult {
     feeLagMonths: number;
     mode: RecalcMode;
     manualCount: number;
-    feeRecalibration: FeeRecalibration | null;
+    feeAdjustment: FeeAdjustment | null;
   };
   validations: ValidationIssue[];
 }

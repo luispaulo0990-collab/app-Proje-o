@@ -6,15 +6,15 @@ Sistema de **projeção físico-financeira de obras** baseado em curvas paramét
 
 ## Status
 
-| Fase           | Entrega                                                                                  | Situação  |
-| -------------- | ---------------------------------------------------------------------------------------- | --------- |
-| 1 Fundação     | monorepo, TS strict, ESLint/Prettier, design tokens, schema + migrations                 | ✅        |
-| 2 Autenticação | cadastro, login, sessão persistente (refresh rotativo), recuperação de senha, RBAC       | ✅        |
-| 3 Obras        | CRUD, duplicar, arquivar, exclusão protegida, validações front + back                    | ✅        |
-| 4 Curvas       | CRUD, versionamento imutável, validação, gráfico, colar do Excel, normalizar             | ✅        |
-| 5 Motor        | cronograma, reamostragem, taxa com defasagem, ajustes manuais, recálculo, KPIs, carteira | ✅        |
-| 6 Grade        | grade editável estilo Excel, virtualizada, visão de carteira                             | próxima   |
-| 7–10           | histórico/comparação de versões, endurecimento da API, performance, deploy               | planejado |
+| Fase           | Entrega                                                                                                      | Situação  |
+| -------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| 1 Fundação     | monorepo, TS strict, ESLint/Prettier, design tokens, schema + migrations                                     | ✅        |
+| 2 Autenticação | cadastro, login, sessão persistente (refresh rotativo), recuperação de senha, RBAC                           | ✅        |
+| 3 Obras        | CRUD, duplicar, arquivar, exclusão protegida, validações front + back                                        | ✅        |
+| 4 Curvas       | CRUD, versionamento imutável, validação, gráfico, colar do Excel, normalizar                                 | ✅        |
+| 5 Motor        | cronograma, reamostragem, taxa (competência M−1, emissão + INCC), ajustes manuais, recálculo, KPIs, carteira | ✅        |
+| 6 Grade        | grade editável estilo Excel, virtualizada, visão de carteira                                                 | próxima   |
+| 7–10           | histórico/comparação de versões, endurecimento da API, performance, deploy                                   | planejado |
 
 Uma prévia somente leitura da grade horizontal já está na tela de projeção.
 
@@ -72,7 +72,7 @@ Só é preciso ter o **Node.js LTS** instalado (https://nodejs.org). Não precis
    - Na primeira vez ele instala as dependências (alguns minutos).
 2. O navegador abre em http://localhost:3333.
 3. Clique em **Criar conta** — o primeiro usuário vira **ADMIN**.
-4. Já vêm carregadas as 2 curvas padrão e as **37 obras da aba Painel (2)** de `Painel de obras.xlsx` (orçamento, % taxa, defasagem e o avanço físico de cada obra como curva própria). Bumerangue (sem avanço físico) e Parque das Cerejeiras (sem orçamento) não foram importadas.
+4. Já vêm carregadas as 2 curvas padrão e as **37 obras da aba Painel (2)** de `Painel de obras.xlsx` (orçamento, % taxa e o avanço físico de cada obra como curva própria). Bumerangue (sem avanço físico) e Parque das Cerejeiras (sem orçamento) não foram importadas.
 
 Os dados ficam na pasta `.demo-data/` (apague-a para recomeçar do zero). Para encerrar, feche a janela preta.
 Em outros sistemas: `npm install && npm run demo`.

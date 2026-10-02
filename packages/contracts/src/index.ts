@@ -4,5 +4,6 @@ export * from './curves.js';
 export * from './works.js';
 export * from './projections.js';
 export * from './work-curves.js';
+export * from './fees.js';
 export * from './portfolio.js';
 export * from './integrations.js';

@@ -13,7 +13,7 @@ export interface TestContext {
 
 export async function createTestApp(
   overrides: Record<string, string> = {},
-  options: Pick<Parameters<typeof buildApp>[0], 'workCurveProvider'> = {},
+  options: Pick<Parameters<typeof buildApp>[0], 'workCurveProvider' | 'economicProvider'> = {},
 ): Promise<TestContext> {
   const env = loadEnv({
     NODE_ENV: 'test',
@@ -32,7 +32,7 @@ export async function createTestApp(
 }
 
 export async function resetDatabase(db: Database): Promise<void> {
-  await db.execute(sql`TRUNCATE audit_logs, fee_recalibrations, work_progress_indicators, projection_values, projections, work_actual_curve_points,
+  await db.execute(sql`TRUNCATE audit_logs, fee_issuances, work_economic_indicators, incc_indices, work_progress_indicators, projection_values, projections, work_actual_curve_points,
     work_actual_curves, works, clients, curve_points,
     curve_versions, curves, password_reset_tokens, refresh_tokens, users RESTART IDENTITY CASCADE`);
 }

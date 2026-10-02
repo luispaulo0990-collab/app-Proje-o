@@ -1,15 +1,15 @@
 # Status do projeto — Painel de Obras Unità
 
-Atualizado em 30/09/2026.
+Atualizado em 02/10/2026.
 
 ## Onde está o código
 
-Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO/unita-projecoes` (monorepo npm workspaces).
+Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório GitHub `app-Proje-o`, monorepo npm workspaces). A subpasta `unita-projecoes` é uma cópia antiga.
 
 ## Decisões confirmadas com o usuário
 
 - Hospedagem: **Hostinger VPS** → Node 22 + PostgreSQL 16 + Nginx + PM2, um domínio com `/api`.
-- Taxa: `taxa mensal = %físico × orçamento raso × %taxa`, com **defasagem configurável por obra** (`feeLagMonths`).
+- Taxa: `taxa mensal = %físico × orçamento raso × %taxa`, recebida no **mês seguinte ao avanço (competência M−1, fixa)**. Desde 01/10/2026: **taxa emitida** mensal por obra + **INCC** mensal (o de M−1 corrige o saldo de M); o saldo é projetado pela curva. Substituiu a defasagem por obra e o “Ajuste projeção taxa”.
 - Escopo da 1ª sessão: plano + Fases 1–5.
 - Curvas próprias das obras: **endpoint genérico** (`PUT /works/:id/actual-curve`, JWT ou `X-Api-Key`); sistema de origem ainda a definir.
 - Curva própria de obra iniciada **recalcula a taxa** (receita) e alimenta o Consolidado.
@@ -60,6 +60,24 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO/unita-projecoes` (monor
 - Testes: engine 82 · API 58 · web 3.
 - **Pendente:** no modo demonstração não há Graph configurado, então Avanço/Status aparecem como “Aguardando API / Sem dados” até a 1ª sincronização (ou envio pelo endpoint). Confirmar na 1ª simulação que a coluna “Meta Acumulada - Atual” existe com esse nome na aba BD_Infos Gerais.
 
+## Concluído (02/10/2026 — Coluna IEC Obra no Consolidado)
+
+- Integração Microsoft Graph validada pelo usuário (“a API está funcionando”).
+- Nova coluna **IEC obra / resultado** no Consolidado (após Status cliente): IEC do último fechamento ≤ mês de referência e, embaixo, o Resultado Projetado Obra (vermelho se negativo).
+- Fonte: aba **BD_Econômico** (`.../workbook/worksheets('BD_Econômico')/usedRange`), linha **Item = “Geral”**, colunas `IEC Obra` e `Resultado Projetado Obra`; lida na mesma execução de Simular / Importar (botão agora “Importar curvas e IEC”), com relatório próprio no painel de sincronização. Variáveis `MS_GRAPH_SHEET_ECONOMICO`, `MS_GRAPH_IEC_COLUMN`, `MS_GRAPH_PROJECTED_RESULT_COLUMN`, `MS_GRAPH_ECONOMICO_TOTAL_ITEM` (padrões já corretos).
+- Motor: `computeEconomicIndicators`, `canonicalEconomicEntry`, `isEconomicClosing` (IEC 0 = sem IEC; IEC 0 + resultado 0 = sem fechamento). API: `GET/PUT /works/:id/economic-indicators` (JWT EDITOR ou `X-Api-Key`), auditoria `IMPORT_ECONOMIC`. Banco: migration `0004_economic_indicators` (`work_economic_indicators`). Regras: CALCULATION_RULES §16.
+- Testes: engine 101 · API 71 · web 4.
+- **Pendente:** confirmar na 1ª simulação que a linha “Geral” traz o IEC preenchido (na amostra de MAI/26 do Klabin a linha Geral e os itens vieram com IEC 0). Se o IEC só existir por item, definir a regra de consolidação.
+
+## Concluído (02/10/2026 — INCC por número-índice + histórico INCC-DI)
+
+- Decisão do usuário: o cadastro do INCC passa a ser o **índice do mês**, não mais a variação. O motor calcula a variação (`índice M ÷ índice M−1 − 1`, 8 casas) com `inccRatesFromIndices`; a regra de correção (INCC de M−1 corrige o saldo de M) não mudou.
+- Histórico **INCC-DI (FGV), AGO/1994 → AGO/2026, 385 meses** (`INCC-DI.xlsx`, aba Plan1) em `apps/api/src/database/data/incc-di.json`, carregado pelo seed só nos meses ainda não cadastrados (edições nunca são sobrescritas); após a carga as obras com taxa emitida são recalculadas. Conferência: variações recalculadas batem com a coluna “No mês” da planilha (diferença máx. 0,005 p.p., arredondamento da FGV). Data 02/07/2011 normalizada para 01/07/2011.
+- Banco: migration `0005_incc_indices` (cria `incc_indices`, **remove `incc_rates`** — variações digitadas antes não são convertidas; o histórico as substitui).
+- API: `GET/PUT/DELETE /incc-indices[/:mes]` (`{ index }`) e `PUT /incc-indices` em lote; o DTO traz `index` e a `rate` calculada. Auditoria `INCC_SET`, `INCC_IMPORT`, `INCC_REMOVED`.
+- Web: painel “INCC mensal (número-índice)” — campo “INCC do mês (índice)”, lista com índice e variação calculada, mensagem com a variação após salvar.
+- Testes: engine 103 · API 73 · web 4.
+
 ## Próximos passos
 
 1. **Fase 6** — grade editável estilo Excel (TanStack Table + virtualização): edição de célula, Enter/Tab/setas, copiar/colar, seleção múltipla, marcação manual, salvar em lote (PUT /projections/:workId já existe); visão de carteira já existe (Consolidado, somente leitura); falta virtualizar para centenas de obras.
@@ -72,3 +90,11 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO/unita-projecoes` (monor
 - `iniciar-demo.bat` (duplo clique no Windows) ou `npm run demo`: só exige Node.js LTS.
 - Usa PostgreSQL embarcado (PGlite, `DATABASE_URL=pglite:<pasta>`) em `.demo-data/`, aplica migrations, carrega curvas + as 37 obras reais da planilha e serve API + site em http://localhost:3333.
 - Primeiro usuário cadastrado vira ADMIN. Não é para produção.
+
+## Concluído (01/10/2026 — Taxa emitida e INCC no Consolidado)
+
+- Decisões do usuário: correção composta mês a mês do saldo (`saldo × (1 + INCC)`); INCC de M−1 corrige M; competência M−1 fixa para todas as obras; a taxa emitida substitui o “Ajuste projeção taxa”.
+- Motor: `fee-schedule.ts` (`buildFeeSchedule`, `FEE_COMPETENCE_LAG_MONTHS = 1`), `distribution.ts`; origem de célula `ISSUED`; `feeAdjustment` no resultado. Motor 0.3.0. 19 testes novos (93 no total).
+- API: `GET/PUT/DELETE /works/:id/fee-issuances[/:mes]` e `GET/PUT/DELETE /incc-rates[/:mes]` (JWT EDITOR ou `X-Api-Key`); auditoria; recálculo das obras com emissão ao salvar INCC; grade da projeção bloqueia edição de mês emitido. Removidos `/fee-recalibration` e o campo `feeLagMonths`. 8 testes novos (64 no total).
+- Banco: migration `0003_fee_issuances_incc` (`fee_issuances`, `incc_rates`, valor `ISSUED` em `cell_origin`; remove `fee_recalibrations` e `works.fee_lag_months`). Ao migrar, projeções antigas são recalculadas uma vez com as regras novas (`fee-rules-upgrade.ts`), preservando ajustes manuais.
+- Web: coluna “Taxa emitida no mês” (edição inline, remoção com confirmação), painel “INCC mensal” no Consolidado, células verdes = taxa emitida; formulário da obra sem defasagem.

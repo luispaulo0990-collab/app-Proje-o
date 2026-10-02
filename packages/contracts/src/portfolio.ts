@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { fractionString, moneyString, uuid } from './common.js';
+import { decimalString, fractionString, uuid } from './common.js';
+import { feeAdjustmentDto, feeIssuanceDto, isoMonth } from './fees.js';
 import { cellOriginSchema } from './projections.js';
 import { curveSourceSchema, referenceQuery } from './work-curves.js';
 import { workStatusSchema } from './works.js';
@@ -11,11 +12,6 @@ export const consolidatedQuery = referenceQuery.extend({
 export type ConsolidatedQuery = z.infer<typeof consolidatedQuery>;
 
 const cell = z.object({ month: z.string(), value: z.string(), origin: cellOriginSchema });
-
-const isoMonth = z
-  .string()
-  .regex(/^\d{4}-\d{2}(-01)?$/, 'Mês inválido (AAAA-MM ou AAAA-MM-01).')
-  .transform((v) => (v.length === 7 ? `${v}-01` : v));
 
 export const clientStatusSchema = z.enum(['OK', 'ATRASADA', 'SEM_DADOS']);
 export type ClientStatus = z.infer<typeof clientStatusSchema>;
@@ -36,19 +32,18 @@ export const workProgressDto = z.object({
 });
 export type WorkProgressDto = z.infer<typeof workProgressDto>;
 
-export const feeRecalibrationDto = z.object({
-  id: uuid,
-  referenceMonth: z.string(),
-  fromMonth: z.string(),
-  remainingTotal: z.string(),
-  previousRemaining: z.string(),
-  note: z.string().nullable(),
-  createdBy: z.string().nullable(),
-  createdAt: z.string(),
-  /** False when the current projection was generated before this recalibration. */
-  applied: z.boolean(),
+/** Economic closing of the cost-control system at the reference month ("IEC Obra"). */
+export const workEconomicDto = z.object({
+  /** Closing month shown (latest ≤ reference); null = no closing received. */
+  month: z.string().nullable(),
+  /** "IEC Obra" (index, 6 decimals: "1.020000" = 102%). */
+  iec: z.string().nullable(),
+  /** "Resultado Projetado Obra" (R$; negative = loss). */
+  projectedResult: z.string().nullable(),
+  source: z.string().nullable(),
+  updatedAt: z.string().nullable(),
 });
-export type FeeRecalibrationDto = z.infer<typeof feeRecalibrationDto>;
+export type WorkEconomicDto = z.infer<typeof workEconomicDto>;
 
 export const consolidatedWorkDto = z.object({
   workId: uuid,
@@ -68,9 +63,13 @@ export const consolidatedWorkDto = z.object({
   monthsIncurred: z.number().int(),
   curveMonths: z.number().int().nullable(),
   progress: workProgressDto,
-  /** Fee months after the reference month — 0 = nothing left to recalibrate. */
-  feeMonthsAfterReference: z.number().int(),
-  feeRecalibration: feeRecalibrationDto.nullable(),
+  economic: workEconomicDto,
+  /** "Taxa emitida" in the reference month (null = not informed yet). */
+  feeIssuance: feeIssuanceDto.nullable(),
+  /** Whether the reference month is inside the work's fee horizon (an issuance is accepted). */
+  acceptsIssuance: z.boolean(),
+  /** Issuance/INCC summary of the current projection; null = fee follows budget × rate. */
+  feeAdjustment: feeAdjustmentDto.nullable(),
   curveSource: curveSourceSchema,
   projectionVersion: z.number().int(),
   isStale: z.boolean(),
@@ -109,7 +108,8 @@ export const consolidatedDto = z.object({
     delayedWorks: z.number().int(),
     budgetTotal: z.string(),
     unitsTotal: z.number().int(),
-    recalibratedWorks: z.number().int(),
+    /** Works with "taxa emitida" informed in the reference month. */
+    issuedWorksAtReference: z.number().int(),
   }),
   works: z.array(consolidatedWorkDto),
 });
@@ -153,16 +153,38 @@ export const progressIndicatorsDto = z.object({
 });
 export type ProgressIndicatorsDto = z.infer<typeof progressIndicatorsDto>;
 
-/** "Ajuste projeção de taxa": new Σ fee still to be received after the reference month. */
-export const feeRecalibrationBody = z.object({
-  referenceMonth: isoMonth,
-  remainingTotal: moneyString,
-  note: z.string().trim().max(500).optional(),
+/**
+ * Economic closings of a work pushed by the cost-control system (generic endpoint; the
+ * SharePoint sync of "BD_Econômico" writes the same data). Full history, replaces what exists.
+ */
+export const economicIndicatorsBody = z.object({
+  source: z.string().trim().min(2).max(60),
+  externalRef: z.string().trim().max(160).optional(),
+  months: z
+    .array(
+      z.object({
+        month: isoMonth,
+        /** "IEC Obra" (1.02 = 102%). */
+        iec: fractionString.nullable().optional(),
+        /** "Resultado Projetado Obra" in R$ (may be negative). */
+        projectedResult: decimalString.nullable().optional(),
+      }),
+    )
+    .max(600)
+    .refine((m) => new Set(m.map((x) => x.month)).size === m.length, 'Mês repetido.'),
 });
-export type FeeRecalibrationBody = z.input<typeof feeRecalibrationBody>;
+export type EconomicIndicatorsBody = z.input<typeof economicIndicatorsBody>;
 
-export const feeRecalibrationResponse = z.object({
-  recalibration: feeRecalibrationDto.nullable(),
-  projectionVersion: z.number().int(),
+export const economicIndicatorsDto = z.object({
+  workId: uuid,
+  source: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+  months: z.array(
+    z.object({
+      month: z.string(),
+      iec: z.string().nullable(),
+      projectedResult: z.string().nullable(),
+    }),
+  ),
 });
-export type FeeRecalibrationResponse = z.infer<typeof feeRecalibrationResponse>;
+export type EconomicIndicatorsDto = z.infer<typeof economicIndicatorsDto>;

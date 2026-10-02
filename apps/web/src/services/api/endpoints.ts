@@ -3,8 +3,11 @@ import type {
   ActualCurveStateDto,
   AuditLogDto,
   ConsolidatedDto,
-  FeeRecalibrationBody,
-  FeeRecalibrationResponse,
+  FeeIssuanceBody,
+  FeeIssuanceResponse,
+  InccIndexBody,
+  InccIndexListResponse,
+  InccIndexResponse,
   ProgressIndicatorsDto,
   CurveSyncReportDto,
   IntegrationStatusDto,
@@ -115,10 +118,18 @@ export const portfolioApi = {
     api.get<ConsolidatedDto>('/portfolio/consolidated', { ...filters }),
   progress: (workId: string) =>
     api.get<ProgressIndicatorsDto>(`/works/${workId}/progress-indicators`),
-  setFeeRecalibration: (workId: string, body: FeeRecalibrationBody) =>
-    api.put<FeeRecalibrationResponse>(`/works/${workId}/fee-recalibration`, body),
-  clearFeeRecalibration: (workId: string) =>
-    api.delete<FeeRecalibrationResponse>(`/works/${workId}/fee-recalibration`),
+};
+
+/** Fee inputs of the Consolidado. Months travel as `AAAA-MM-01`. */
+export const feesApi = {
+  setIssuance: (workId: string, month: string, body: FeeIssuanceBody) =>
+    api.put<FeeIssuanceResponse>(`/works/${workId}/fee-issuances/${month}`, body),
+  deleteIssuance: (workId: string, month: string) =>
+    api.delete<FeeIssuanceResponse>(`/works/${workId}/fee-issuances/${month}`),
+  listIncc: () => api.get<InccIndexListResponse>('/incc-indices'),
+  setIncc: (month: string, body: InccIndexBody) =>
+    api.put<InccIndexResponse>(`/incc-indices/${month}`, body),
+  deleteIncc: (month: string) => api.delete<InccIndexResponse>(`/incc-indices/${month}`),
 };
 
 export const workCurvesApi = {

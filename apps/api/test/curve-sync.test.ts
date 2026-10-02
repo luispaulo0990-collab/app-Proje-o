@@ -48,7 +48,6 @@ async function createWork(name: string, startDate = '2025-01-01') {
       units: 100,
       budget: '1000000.00',
       feeRate: '0.10',
-      feeLagMonths: 0,
       constructionSystem: 'Alvenaria Estrutural',
       curveVersionId,
       startDate,

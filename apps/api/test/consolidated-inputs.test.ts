@@ -35,12 +35,12 @@ interface ConsolidatedWork {
   projectedEndMonth: string | null;
   monthsIncurred: number;
   curveMonths: number | null;
-  feeMonthsAfterReference: number;
+  acceptsIssuance: boolean;
   feeAtReference: string;
   feeRealized: string;
   feeRemaining: string;
   progress: Record<string, string | null>;
-  feeRecalibration: Record<string, string | boolean | null> | null;
+  feeIssuance: Record<string, string | null> | null;
 }
 
 async function consolidated(referenceDate: string) {
@@ -84,7 +84,6 @@ beforeEach(async () => {
       units: 205,
       budget: '1000000.00',
       feeRate: '0.10',
-      feeLagMonths: 0,
       constructionSystem: 'Alvenaria Estrutural',
       curveVersionId: curve.json().latestVersionId,
       startDate: '2027-01-01',
@@ -104,10 +103,10 @@ describe('Consolidado — registered fields and schedule', () => {
       projectedEndMonth: '2028-10-01',
       monthsIncurred: 6,
       curveMonths: 22,
-      feeMonthsAfterReference: 16,
+      acceptsIssuance: true,
     });
     expect(work.progress.clientStatus).toBe('SEM_DADOS');
-    expect(work.feeRecalibration).toBeNull();
+    expect(work.feeIssuance).toBeNull();
   });
 });
 
@@ -169,84 +168,6 @@ describe('PUT /works/:id/progress-indicators', () => {
       payload,
     });
     expect(denied.statusCode).toBe(403);
-  });
-});
-
-describe('PUT/DELETE /works/:id/fee-recalibration (Ajuste projeção de taxa)', () => {
-  const recalibrate = (remainingTotal: string, token = admin) =>
-    ctx.app.inject({
-      method: 'PUT',
-      url: `/api/v1/works/${workId}/fee-recalibration`,
-      headers: auth(token),
-      payload: { referenceMonth: '2027-06', remainingTotal, note: 'Aditivo de prazo' },
-    });
-
-  it('spreads the new remaining after the reference month and survives recalculation', async () => {
-    const before = (await consolidated('2027-06-01')).work;
-    const res = await recalibrate('50000.00');
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({
-      projectionVersion: 2,
-      recalibration: {
-        fromMonth: '2027-07-01',
-        remainingTotal: '50000.00',
-        previousRemaining: before.feeRemaining,
-        applied: true,
-      },
-    });
-
-    const after = (await consolidated('2027-06-01')).work;
-    expect(after.feeRealized).toBe(before.feeRealized);
-    expect(after.feeAtReference).toBe(before.feeAtReference);
-    expect(after.feeRemaining).toBe('50000.00');
-    expect(after.feeRecalibration).toMatchObject({ applied: true, note: 'Aditivo de prazo' });
-
-    // A later recalculation (e.g. new curve) keeps the recalibration.
-    await ctx.app.inject({
-      method: 'POST',
-      url: `/api/v1/projections/${workId}/calculate`,
-      headers: auth(admin),
-      payload: { mode: 'REPLACE_MANUAL' },
-    });
-    expect((await consolidated('2027-06-01')).work.feeRemaining).toBe('50000.00');
-
-    const removed = await ctx.app.inject({
-      method: 'DELETE',
-      url: `/api/v1/works/${workId}/fee-recalibration`,
-      headers: auth(admin),
-    });
-    expect(removed.json()).toMatchObject({ recalibration: null, projectionVersion: 4 });
-    const restored = (await consolidated('2027-06-01')).work;
-    expect(restored.feeRemaining).toBe(before.feeRemaining);
-    expect(restored.feeRecalibration).toBeNull();
-
-    const history = JSON.stringify(
-      (await ctx.app.inject({ url: `/api/v1/works/${workId}/audit`, headers: auth(admin) })).json(),
-    );
-    expect(history).toContain('FEE_RECALIBRATION');
-    expect(history).toContain('FEE_RECALIBRATION_CLEARED');
-  });
-
-  it('rejects invalid values, months without fee and viewers', async () => {
-    expect((await recalibrate('-1')).statusCode).toBe(400);
-    expect((await recalibrate('10.001')).statusCode).toBe(400);
-    const late = await ctx.app.inject({
-      method: 'PUT',
-      url: `/api/v1/works/${workId}/fee-recalibration`,
-      headers: auth(admin),
-      payload: { referenceMonth: '2030-01', remainingTotal: '10.00' },
-    });
-    expect(late.statusCode).toBe(422);
-    // Rejected recalibration leaves nothing behind.
-    expect((await consolidated('2027-06-01')).work.feeRecalibration).toBeNull();
-    const viewer = (await registerUser(ctx.app, 'viewer@unita.com.br')).token;
-    expect((await recalibrate('10.00', viewer)).statusCode).toBe(403);
-    const nothing = await ctx.app.inject({
-      method: 'DELETE',
-      url: `/api/v1/works/${workId}/fee-recalibration`,
-      headers: auth(admin),
-    });
-    expect(nothing.statusCode).toBe(404);
   });
 });
 

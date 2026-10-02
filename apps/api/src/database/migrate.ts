@@ -4,17 +4,22 @@ import { migrate as migrateNodePg } from 'drizzle-orm/node-postgres/migrator';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
+import { upgradeProjectionsToCurrentFeeRules } from '../modules/projections/fee-rules-upgrade.js';
 import { createDatabase, type Database, type Schema } from './client.js';
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
 
-/** Applies versioned SQL migrations (apps/api/drizzle) on an open database handle. */
+/**
+ * Applies versioned SQL migrations (apps/api/drizzle) on an open database handle, then the
+ * idempotent data upgrades that need the engine (projections under outdated rules).
+ */
 export async function migrateDatabase(db: Database): Promise<void> {
   if (db.driver === 'pglite') {
     await migratePglite(db as unknown as PgliteDatabase<Schema>, { migrationsFolder });
   } else {
     await migrateNodePg(db as unknown as NodePgDatabase<Schema>, { migrationsFolder });
   }
+  await upgradeProjectionsToCurrentFeeRules(db);
 }
 
 /** Opens, migrates and closes (works from src/ and dist/). */

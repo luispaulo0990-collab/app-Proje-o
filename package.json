@@ -17,6 +17,7 @@
     "dev:web": "npm run dev --workspace=@unita/web",
     "build": "npm run build --workspaces --if-present",
     "build:vercel": "npm run build && npm run db:migrate:prod --workspace=@unita/api && npm run db:seed:prod --workspace=@unita/api",
+    "start": "node server.js",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",

@@ -1,10 +1,13 @@
 import {
+  inccRatesFromIndices,
+  FEE_COMPETENCE_LAG_MONTHS,
   calculateProjection,
   computeKpis,
   hydrateProjection,
   monthIndexIn,
   resolveEffectiveCurve,
   type EffectiveCurve,
+  type FeeAdjustment,
   type ManualCell,
   type ProjectionResult,
   type RecalcMode,
@@ -22,19 +25,26 @@ import {
   type ActualCurveWithPoints,
 } from '../../database/repositories/actual-curves.repository.js';
 import { auditRepository, type AuditEntry } from '../../database/repositories/audit.repository.js';
-import { feeRecalibrationsRepository } from '../../database/repositories/consolidated-inputs.repository.js';
 import { curvesRepository } from '../../database/repositories/curves.repository.js';
+import {
+  feeIssuancesRepository,
+  toEngineIssuance,
+} from '../../database/repositories/fee-issuances.repository.js';
+import {
+  inccIndicesRepository,
+  toEngineInccIndex,
+} from '../../database/repositories/incc-indices.repository.js';
 import {
   projectionsRepository,
   type ProjectionRow,
   type ProjectionValueRow,
 } from '../../database/repositories/projections.repository.js';
 import { worksRepository, type WorkRow } from '../../database/repositories/works.repository.js';
-import type { AppDeps, AuthUser } from '../../types.js';
+import type { Actor, AppDeps, AuthUser } from '../../types.js';
 import { currentMonth, toMonth } from '../../utils/dates.js';
-import { notFound } from '../../utils/errors.js';
+import { badRequest, notFound } from '../../utils/errors.js';
 
-export const ENGINE_VERSION = '0.2.0';
+export const ENGINE_VERSION = '0.3.0';
 
 /** Snapshot persisted with every projection version (traceability — spec §39). */
 export interface ProjectionParameters {
@@ -54,22 +64,46 @@ export interface ProjectionParameters {
   curveVersionId: string;
   engineVersion: string;
   droppedManualCells?: number;
-  /** "Ajuste projeção de taxa" in force when the version was generated. */
-  feeRecalibration?: {
-    id: string;
-    fromMonth: string;
-    remainingTotal: string;
-  } | null;
+  /** Issuances/INCC in force when the version was generated (null = budget × rate). */
+  feeAdjustment?: FeeAdjustment | null;
+  /** Legacy (≤ 0.2.0): "Ajuste projeção de taxa", replaced by the fee issuances. */
+  feeRecalibration?: unknown;
 }
 
-/** Engine input for a stored version — shared by every read path (single source of truth). */
-export function storedFeeRecalibration(params: ProjectionParameters) {
-  return params.feeRecalibration
-    ? {
-        fromMonth: params.feeRecalibration.fromMonth,
-        remainingTotal: params.feeRecalibration.remainingTotal,
-      }
-    : null;
+/**
+ * Rebuilds a stored version through the engine — the single read path used by the
+ * projection screen and the Consolidado.
+ */
+export function hydrateStoredProjection(
+  row: Pick<ProjectionRow, 'parameters'>,
+  values: readonly ProjectionValueRow[],
+): ProjectionResult {
+  const params = row.parameters as ProjectionParameters;
+  const pick = (series: Series) =>
+    values
+      .filter((v) => v.series === series)
+      .map((v) => ({
+        periodIndex: v.periodIndex,
+        original: v.originalValue,
+        current: v.currentValue,
+        origin: v.origin,
+      }));
+  return hydrateProjection({
+    startDate: params.startDate,
+    durationMonths: params.durationMonths,
+    budget: params.budget,
+    feeRate: params.feeRate,
+    feeLagMonths: params.feeLagMonths,
+    mode: params.mode,
+    feeAdjustment: params.feeAdjustment ?? null,
+    physical: pick('PHYSICAL'),
+    fee: pick('FEE'),
+  });
+}
+
+/** True when the version was generated before the current fee rules (M−1, issuances, INCC). */
+export function usesOutdatedFeeRules(params: ProjectionParameters): boolean {
+  return params.feeLagMonths !== FEE_COMPETENCE_LAG_MONTHS || params.feeRecalibration != null;
 }
 
 /** Manual cell anchored to its competence month, so it survives a change of start month. */
@@ -90,12 +124,13 @@ export function manualFromValues(values: ProjectionValueRow[]): AnchoredManualCe
 function placeManualCells(
   cells: readonly AnchoredManualCell[],
   effective: EffectiveCurve,
-  feeLagMonths: number,
 ): ManualCell[] {
   return cells.flatMap((c) => {
     const periodIndex = c.month ? monthIndexIn(effective.startDate, c.month) : c.periodIndex;
     const limit =
-      c.series === 'PHYSICAL' ? effective.durationMonths : effective.durationMonths + feeLagMonths;
+      c.series === 'PHYSICAL'
+        ? effective.durationMonths
+        : effective.durationMonths + FEE_COMPETENCE_LAG_MONTHS;
     return periodIndex >= 1 && periodIndex <= limit
       ? [{ series: c.series, periodIndex, value: c.value }]
       : [];
@@ -152,20 +187,22 @@ export async function generateProjection(
   options: { mode: RecalcMode; manualCells: AnchoredManualCell[]; note: string | null },
 ): Promise<{ row: ProjectionRow; result: ProjectionResult; dropped: number }> {
   const { effective, actual } = await resolveWorkCurve(tx, work);
-  const kept = placeManualCells(options.manualCells, effective, work.feeLagMonths);
-  const recalibration = await feeRecalibrationsRepository.findCurrent(tx, work.id);
+  const kept = placeManualCells(options.manualCells, effective);
+  const [issuances, inccIndices] = await Promise.all([
+    feeIssuancesRepository.listByWork(tx, work.id),
+    inccIndicesRepository.list(tx),
+  ]);
   const result = calculateProjection({
     startDate: effective.startDate,
     durationMonths: effective.durationMonths,
     curve: effective.curve,
     budget: work.budget,
     feeRate: work.feeRate,
-    feeLagMonths: work.feeLagMonths,
     manualCells: kept,
     mode: options.mode,
-    feeRecalibration: recalibration
-      ? { fromMonth: recalibration.fromMonth, remainingTotal: recalibration.remainingTotal }
-      : null,
+    feeIssuances: issuances.map(toEngineIssuance),
+    // The engine derives the monthly variation from the number-index (single rule).
+    inccRates: inccRatesFromIndices(inccIndices.map(toEngineInccIndex)),
   });
   const dropped = options.mode === 'PRESERVE_MANUAL' ? options.manualCells.length - kept.length : 0;
   const workActualCurveId = effective.source === 'WORK_ACTUAL' ? (actual?.id ?? null) : null;
@@ -179,19 +216,13 @@ export async function generateProjection(
     workActualCurveVersion: workActualCurveId ? (actual?.version ?? null) : null,
     budget: result.parameters.budget,
     feeRate: result.parameters.feeRate,
-    feeLagMonths: work.feeLagMonths,
+    feeLagMonths: result.parameters.feeLagMonths,
     mode: options.mode,
     manualCount: result.parameters.manualCount,
     curveVersionId: work.curveVersionId,
     engineVersion: ENGINE_VERSION,
     ...(dropped > 0 ? { droppedManualCells: dropped } : {}),
-    feeRecalibration: recalibration
-      ? {
-          id: recalibration.id,
-          fromMonth: recalibration.fromMonth,
-          remainingTotal: recalibration.remainingTotal,
-        }
-      : null,
+    feeAdjustment: result.parameters.feeAdjustment,
   };
   const row = await projectionsRepository.createVersion(
     tx,
@@ -210,6 +241,39 @@ export async function generateProjection(
     ],
   );
   return { row, result, dropped };
+}
+
+/**
+ * New version after a change of the fee inputs (issuances, INCC): same curve and parameters,
+ * manual cells preserved, audited on the work's history. A pending "preserve or replace"
+ * decision (isStale) stays pending on the new version.
+ */
+export async function regenerateKeepingManualCells(
+  tx: Db,
+  work: WorkRow,
+  actor: Actor,
+  note: string,
+): Promise<{ row: ProjectionRow; result: ProjectionResult }> {
+  const current = await projectionsRepository.findCurrent(tx, work.id);
+  const values = current ? await projectionsRepository.getValues(tx, current.projection.id) : [];
+  const { row, result } = await generateProjection(tx, work, actor.user, {
+    mode: 'PRESERVE_MANUAL',
+    manualCells: manualFromValues(values),
+    note,
+  });
+  if (current?.projection.isStale) await projectionsRepository.markStale(tx, work.id);
+  await auditRepository.insert(tx, {
+    userId: actor.user?.id ?? null,
+    action: 'RECALCULATE',
+    entity: 'projection',
+    entityId: row.id,
+    workId: work.id,
+    field: note.slice(0, 80),
+    newValue: `V${row.version}`,
+    origin: 'CURVE',
+    metadata: { integration: actor.integration },
+  });
+  return { row, result };
 }
 
 function integrationLabel(metadata: unknown): string | null {
@@ -234,27 +298,7 @@ export function createProjectionsService({ db }: AppDeps) {
   async function toDto(workId: string, referenceDate?: string): Promise<ProjectionDto> {
     await loadWork(db, workId);
     const { projection, createdBy, values } = await loadCurrent(db, workId);
-    const params = projection.parameters as ProjectionParameters;
-    const pick = (series: Series) =>
-      values
-        .filter((v) => v.series === series)
-        .map((v) => ({
-          periodIndex: v.periodIndex,
-          original: v.originalValue,
-          current: v.currentValue,
-          origin: v.origin,
-        }));
-    const result = hydrateProjection({
-      startDate: params.startDate,
-      durationMonths: params.durationMonths,
-      budget: params.budget,
-      feeRate: params.feeRate,
-      feeLagMonths: params.feeLagMonths,
-      mode: params.mode,
-      feeRecalibration: storedFeeRecalibration(params),
-      physical: pick('PHYSICAL'),
-      fee: pick('FEE'),
-    });
+    const result = hydrateStoredProjection(projection, values);
     const referenceMonth = referenceDate ? toMonth(referenceDate) : currentMonth();
     return {
       id: projection.id,
@@ -322,6 +366,11 @@ export function createProjectionsService({ db }: AppDeps) {
         const previous = new Map(values.map((v) => [cellKey(v.series, v.periodIndex), v]));
         for (const change of body.changes) {
           const key = cellKey(change.series, change.periodIndex);
+          if (previous.get(key)?.origin === 'ISSUED') {
+            throw badRequest(
+              'Este mês já tem taxa emitida. Altere o valor emitido na aba Consolidado.',
+            );
+          }
           if (change.value === null) manual.delete(key);
           else
             manual.set(key, {

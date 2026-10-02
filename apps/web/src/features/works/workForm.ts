@@ -27,7 +27,6 @@ export const workFormSchema = z.object({
     const f = percentInputToFraction(v);
     return f !== null && !f.startsWith('-') && Number(f) <= 1;
   }, 'Informe um percentual entre 0 e 100.'),
-  feeLagMonths: intString(0, 36, 'Entre 0 e 36 meses.'),
   constructionSystem: z.string().trim().min(2, 'Informe o sistema construtivo.').max(120),
   curveId: z.string().min(1, 'Selecione uma curva.'),
   curveVersionId: z.string().min(1, 'Selecione uma curva.'),
@@ -51,7 +50,6 @@ export const emptyWorkForm: WorkFormValues = {
   units: '',
   budget: '',
   feeRatePct: '',
-  feeLagMonths: '0',
   constructionSystem: '',
   curveId: '',
   curveVersionId: '',
@@ -67,7 +65,6 @@ export function workToForm(w: WorkDto): WorkFormValues {
     units: String(w.units),
     budget: decimalToInput(w.budget),
     feeRatePct: fractionToPercentInput(w.feeRate),
-    feeLagMonths: String(w.feeLagMonths),
     constructionSystem: w.constructionSystem,
     curveId: w.curve.id,
     curveVersionId: w.curve.versionId,
@@ -84,7 +81,6 @@ export function formToBody(v: WorkFormValues): WorkBodyInput {
     units: Number(v.units),
     budget: parseDecimalInput(v.budget) ?? '',
     feeRate: percentInputToFraction(v.feeRatePct) ?? '',
-    feeLagMonths: Number(v.feeLagMonths),
     constructionSystem: v.constructionSystem,
     curveVersionId: v.curveVersionId,
     startDate: v.startDate,

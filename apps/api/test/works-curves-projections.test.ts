@@ -35,7 +35,6 @@ function workPayload(curveVersionId: string, patch: Record<string, unknown> = {}
     units: 354,
     budget: '44187790.05',
     feeRate: '0.09',
-    feeLagMonths: 0,
     constructionSystem: 'Alvenaria Estrutural',
     curveVersionId,
     startDate: '2027-01-01',

@@ -71,6 +71,15 @@ export function parseDecimalInput(input: string): string | null {
   return shiftDecimal(s, 0);
 }
 
+/**
+ * Money typed in pt-BR: like parseDecimalInput, but dots followed by groups of 3 digits are
+ * thousands separators ("150.000" = cento e cinquenta mil, never R$ 150,00).
+ */
+export function parseMoneyInput(input: string): string | null {
+  const s = input.replace(/R\$|\s/g, '');
+  return parseDecimalInput(/^-?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s);
+}
+
 /** "12,35" (percent typed by the user) → "0.1235" (fraction for the API). */
 export function percentInputToFraction(input: string): string | null {
   const parsed = parseDecimalInput(input);

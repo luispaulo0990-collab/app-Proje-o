@@ -35,7 +35,7 @@ export const workStatusEnum = pgEnum('work_status', ['DRAFT', 'ACTIVE', 'COMPLET
 export const curveTypeEnum = pgEnum('curve_type', ['PHYSICAL']);
 export const curveStatusEnum = pgEnum('curve_status', ['ACTIVE', 'ARCHIVED']);
 export const seriesEnum = pgEnum('projection_series', ['PHYSICAL', 'FEE']);
-export const originEnum = pgEnum('cell_origin', ['CURVE', 'MANUAL']);
+export const originEnum = pgEnum('cell_origin', ['CURVE', 'MANUAL', 'ISSUED']);
 export const curveSourceEnum = pgEnum('curve_source', ['PARAMETRIC', 'WORK_ACTUAL']);
 export const receivedViaEnum = pgEnum('received_via', ['USER', 'API_KEY']);
 
@@ -159,7 +159,6 @@ export const works = pgTable(
     units: integer('units').notNull(),
     budget: money('budget').notNull(),
     feeRate: fraction('fee_rate').notNull(),
-    feeLagMonths: integer('fee_lag_months').notNull().default(0),
     constructionSystem: varchar('construction_system', { length: 120 }).notNull(),
     curveVersionId: uuid('curve_version_id')
       .notNull()
@@ -177,7 +176,6 @@ export const works = pgTable(
     check('works_units_chk', sql`${t.units} > 0`),
     check('works_budget_chk', sql`${t.budget} >= 0`),
     check('works_fee_rate_chk', sql`${t.feeRate} >= 0 AND ${t.feeRate} <= 1`),
-    check('works_fee_lag_chk', sql`${t.feeLagMonths} >= 0`),
     check('works_duration_chk', sql`${t.durationMonths} > 0`),
   ],
 );
@@ -269,37 +267,76 @@ export const workProgressIndicators = pgTable(
   ],
 );
 
-// ─── Fee recalibration ("Ajuste projeção de taxa", versioned) ──────────────
+// ─── Economic indicators of a work (received from the cost-control system) ──
 /**
- * The user informs the new Σ fee still to be received from `from_month` on; the engine spreads
- * it by the curve. Every change is a new row (history); only one is current per work.
+ * Monthly economic closing used by the "Consolidado" ("IEC Obra" column): row "Geral" of the
+ * "BD_Econômico" sheet. One row per work × month; each sync replaces the rows of the work.
  */
-export const feeRecalibrations = pgTable(
-  'fee_recalibrations',
+export const workEconomicIndicators = pgTable(
+  'work_economic_indicators',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
     workId: uuid('work_id')
       .notNull()
       .references(() => works.id, { onDelete: 'cascade' }),
-    /** Consolidado reference month when the value was informed. */
-    referenceMonth: date('reference_month', { mode: 'string' }).notNull(),
-    /** First month affected (reference + 1). */
-    fromMonth: date('from_month', { mode: 'string' }).notNull(),
-    remainingTotal: money('remaining_total').notNull(),
-    /** Σ fee from `from_month` before the recalibration (for comparison). */
-    previousRemaining: money('previous_remaining').notNull(),
-    note: text('note'),
-    isCurrent: boolean('is_current').notNull().default(true),
-    createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    clearedAt: timestamp('cleared_at', { withTimezone: true }),
+    month: date('month', { mode: 'string' }).notNull(),
+    /** "IEC Obra" (index, 1.02 = 102%). */
+    iec: numeric('iec', { precision: 12, scale: 6 }),
+    /** "Resultado Projetado Obra" (R$, negative = loss). */
+    projectedResult: money('projected_result'),
+    source: varchar('source', { length: 60 }).notNull(),
+    externalRef: varchar('external_ref', { length: 160 }),
+    receivedVia: receivedViaEnum('received_via').notNull().default('USER'),
+    updatedById: uuid('updated_by_id').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index('fee_recalibrations_work_idx').on(t.workId, t.createdAt.desc()),
-    uniqueIndex('fee_recalibrations_one_current_uq')
-      .on(t.workId)
-      .where(sql`${t.isCurrent}`),
-    check('fee_recalibrations_remaining_chk', sql`${t.remainingTotal} >= 0`),
+    primaryKey({ columns: [t.workId, t.month] }),
+    check('work_economic_indicators_iec_chk', sql`coalesce(${t.iec}, 0) >= 0`),
+    check('work_economic_indicators_month_chk', sql`extract(day from ${t.month}) = 1`),
+  ],
+);
+
+// ─── Fee issuances and INCC ────────────────────────────────────────────────
+/**
+ * "Taxa emitida": fee actually invoiced for a work in a month (competência M−1: it refers to the
+ * progress of the previous month). From the first issuance on, the engine projects only the
+ * INCC-corrected balance.
+ */
+export const feeIssuances = pgTable(
+  'fee_issuances',
+  {
+    workId: uuid('work_id')
+      .notNull()
+      .references(() => works.id, { onDelete: 'cascade' }),
+    month: date('month', { mode: 'string' }).notNull(),
+    amount: money('amount').notNull(),
+    note: text('note'),
+    updatedById: uuid('updated_by_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.workId, t.month] }),
+    check('fee_issuances_amount_chk', sql`${t.amount} >= 0`),
+    check('fee_issuances_month_chk', sql`extract(day from ${t.month}) = 1`),
+  ],
+);
+
+/**
+ * INCC number-index of each month (global, e.g. 1.123,456). The engine derives the monthly
+ * variation (index M ÷ index M−1 − 1); the variation of M−1 corrects the balance received in M.
+ */
+export const inccIndices = pgTable(
+  'incc_indices',
+  {
+    month: date('month', { mode: 'string' }).primaryKey(),
+    indexValue: numeric('index_value', { precision: 14, scale: 6 }).notNull(),
+    note: text('note'),
+    updatedById: uuid('updated_by_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    check('incc_indices_value_chk', sql`${t.indexValue} > 0`),
+    check('incc_indices_month_chk', sql`extract(day from ${t.month}) = 1`),
   ],
 );
 

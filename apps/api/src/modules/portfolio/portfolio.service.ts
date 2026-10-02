@@ -3,26 +3,28 @@ import {
   MONEY_SCALE,
   toFixedString,
   buildConsolidatedPanel,
+  computeEconomicIndicators,
   computeProgressIndicators,
   firstProgressMonth,
-  hydrateProjection,
   monthsBetween,
   monthsIncurred,
   projectedEndMonth,
   type ProjectionCell,
-  type Series,
 } from '@unita/engine';
 import type { ConsolidatedDto, ConsolidatedQuery, ConsolidatedWorkDto } from '@unita/contracts';
 import {
-  feeRecalibrationsRepository,
+  economicIndicatorsRepository,
   progressIndicatorsRepository,
+  toEconomicEntry,
   toProgressEntry,
 } from '../../database/repositories/consolidated-inputs.repository.js';
+import { feeIssuancesRepository } from '../../database/repositories/fee-issuances.repository.js';
 import { loadPortfolio } from '../../services/portfolio-loader.js';
 import type { AppDeps } from '../../types.js';
 import { currentMonth, toMonth } from '../../utils/dates.js';
+import { toIssuanceDto } from '../fees/fees.service.js';
 import {
-  storedFeeRecalibration,
+  hydrateStoredProjection,
   type ProjectionParameters,
 } from '../projections/projections.service.js';
 
@@ -39,35 +41,15 @@ export function createPortfolioService({ db }: AppDeps) {
       const referenceMonth = query.referenceDate ? toMonth(query.referenceDate) : currentMonth();
       const entries = (await loadPortfolio(db, query, referenceMonth)).filter((e) => e.projection);
       const ids = entries.map((e) => e.work.work.id);
-      const [indicatorsByWork, recalByWork] = await Promise.all([
+      const [indicatorsByWork, economicByWork, issuanceByWork] = await Promise.all([
         progressIndicatorsRepository.listByWorks(db, ids),
-        feeRecalibrationsRepository.findCurrentByWorks(db, ids),
+        economicIndicatorsRepository.listByWorks(db, ids),
+        feeIssuancesRepository.listByWorksAtMonth(db, ids, referenceMonth),
       ]);
 
       const hydrated = entries.map((e) => {
         const { row, values } = e.projection as NonNullable<typeof e.projection>;
-        const params = row.parameters as ProjectionParameters;
-        const pick = (series: Series) =>
-          values
-            .filter((v) => v.series === series)
-            .map((v) => ({
-              periodIndex: v.periodIndex,
-              original: v.originalValue,
-              current: v.currentValue,
-              origin: v.origin,
-            }));
-        const result = hydrateProjection({
-          startDate: params.startDate,
-          durationMonths: params.durationMonths,
-          budget: params.budget,
-          feeRate: params.feeRate,
-          feeLagMonths: params.feeLagMonths,
-          mode: params.mode,
-          feeRecalibration: storedFeeRecalibration(params),
-          physical: pick('PHYSICAL'),
-          fee: pick('FEE'),
-        });
-        return { entry: e, result };
+        return { entry: e, result: hydrateStoredProjection(row, values) };
       });
 
       const panel = buildConsolidatedPanel(
@@ -94,7 +76,12 @@ export function createPortfolioService({ db }: AppDeps) {
           (acc, r) => (!acc || r.updatedAt > acc.updatedAt ? r : acc),
           null,
         );
-        const recal = recalByWork.get(w.id);
+        const economicRows = economicByWork.get(w.id) ?? [];
+        const lastEconomic = economicRows.reduce<(typeof economicRows)[number] | null>(
+          (acc, r) => (!acc || r.updatedAt > acc.updatedAt ? r : acc),
+          null,
+        );
+        const issuance = issuanceByWork.get(w.id);
         return {
           workId: w.id,
           name: w.name,
@@ -120,20 +107,14 @@ export function createPortfolioService({ db }: AppDeps) {
             source: lastIndicator?.source ?? null,
             updatedAt: lastIndicator?.updatedAt.toISOString() ?? null,
           },
-          feeMonthsAfterReference: result.fee.filter((c) => c.month > referenceMonth).length,
-          feeRecalibration: recal
-            ? {
-                id: recal.id,
-                referenceMonth: recal.referenceMonth,
-                fromMonth: recal.fromMonth,
-                remainingTotal: recal.remainingTotal,
-                previousRemaining: recal.previousRemaining,
-                note: recal.note,
-                createdBy: recal.createdBy,
-                createdAt: recal.createdAt.toISOString(),
-                applied: params?.feeRecalibration?.id === recal.id,
-              }
-            : null,
+          economic: {
+            ...computeEconomicIndicators(economicRows.map(toEconomicEntry), referenceMonth),
+            source: lastEconomic?.source ?? null,
+            updatedAt: lastEconomic?.updatedAt.toISOString() ?? null,
+          },
+          feeIssuance: issuance ? toIssuanceDto(issuance) : null,
+          acceptsIssuance: result.fee.some((c) => c.month === referenceMonth),
+          feeAdjustment: params?.feeAdjustment ?? null,
           curveSource: row?.curveSource ?? 'PARAMETRIC',
           projectionVersion: row?.version ?? 0,
           isStale: row?.isStale ?? false,
@@ -167,7 +148,7 @@ export function createPortfolioService({ db }: AppDeps) {
             MONEY_SCALE,
           ),
           unitsTotal: works.reduce((acc, w) => acc + w.units, 0),
-          recalibratedWorks: works.filter((w) => w.feeRecalibration).length,
+          issuedWorksAtReference: works.filter((w) => w.feeIssuance).length,
         },
         works,
       };

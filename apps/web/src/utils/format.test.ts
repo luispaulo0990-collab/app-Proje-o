@@ -6,6 +6,7 @@ import {
   formatPercent,
   fractionToPercentInput,
   parseDecimalInput,
+  parseMoneyInput,
   percentInputToFraction,
   shiftDecimal,
 } from './format';
@@ -37,5 +38,14 @@ describe('parsing without floating point', () => {
     expect(percentInputToFraction('12,35%')).toBe('0.1235');
     expect(percentInputToFraction('0,1')).toBe('0.001');
     expect(fractionToPercentInput('0.09000000')).toBe('9');
+  });
+
+  it('reads pt-BR thousands separators in money inputs', () => {
+    expect(parseMoneyInput('150.000')).toBe('150000');
+    expect(parseMoneyInput('1.234.567')).toBe('1234567');
+    expect(parseMoneyInput('R$ 150.000,00')).toBe('150000');
+    expect(parseMoneyInput('1234.56')).toBe('1234.56');
+    expect(parseMoneyInput('150000')).toBe('150000');
+    expect(parseMoneyInput('abc')).toBeNull();
   });
 });

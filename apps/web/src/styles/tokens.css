@@ -48,6 +48,7 @@
 
   /* Grid specific */
   --color-cell-manual: #fff4d6;
+  --color-cell-issued: #e7f5ec; /* taxa emitida no mês */
   --color-cell-current-period: #fff1ea;
 
   /* Typography */

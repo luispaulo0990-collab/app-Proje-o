@@ -19,7 +19,6 @@ const base: ProjectionInput = {
   curve: toPoints(UNITA_22),
   budget: '44187790.05',
   feeRate: '0.09',
-  feeLagMonths: 0,
 };
 
 describe('allocateLargestRemainder', () => {
@@ -69,7 +68,8 @@ describe('calculateProjection — automatic', () => {
     expect(r.totals.expectedFee).toBe('3976901.10');
     expect(r.totals.fee).toBe('3976901.10');
     expect(sumOf(r.fee)).toBe('3976901.1');
-    expect(r.fee[0]?.current).toBe('15907.60'); // 0.4% × 3.976.901,10 = 15.907,6044
+    expect(r.fee[0]?.current).toBe('0.00'); // competência M−1: nothing received in JAN/27
+    expect(r.fee[1]?.current).toBe('15907.60'); // 0.4% × 3.976.901,10 = 15.907,6044
   });
 
   it('is deterministic', () => {
@@ -82,14 +82,13 @@ describe('calculateProjection — automatic', () => {
   });
 });
 
-describe('calculateProjection — fee lag', () => {
-  it('shifts receipts by the configured months and extends the financial horizon', () => {
-    const r = calculateProjection({ ...base, feeLagMonths: 2 });
+describe('calculateProjection — competência M−1', () => {
+  it('receives each month of progress one month later and extends the horizon by 1', () => {
+    const r = calculateProjection(base);
     expect(r.physical).toHaveLength(22);
-    expect(r.fee).toHaveLength(24);
-    expect(r.fee.slice(0, 2).map((c) => c.current)).toEqual(['0.00', '0.00']);
-    expect(r.fee[2]?.current).toBe('15907.60');
-    expect(r.fee.at(-1)?.month).toBe('2028-12-01');
+    expect(r.fee).toHaveLength(23);
+    expect(r.fee.at(-1)?.month).toBe('2028-11-01');
+    expect(r.parameters.feeLagMonths).toBe(1);
     expect(r.totals.fee).toBe('3976901.10');
   });
 });
@@ -126,7 +125,13 @@ describe('calculateProjection — manual adjustments', () => {
     expect(r.physical[2]).toMatchObject({ origin: 'MANUAL', original: '0.25000000' });
     expect(r.totals.physical).toBe('1.00000000');
     // fee follows the adjusted physical series
-    expect(r.fee.map((c) => c.current)).toEqual(['20000.00', '20000.00', '40000.00', '20000.00']);
+    expect(r.fee.map((c) => c.current)).toEqual([
+      '0.00',
+      '20000.00',
+      '20000.00',
+      '40000.00',
+      '20000.00',
+    ]);
     expect(r.parameters.manualCount).toBe(1);
   });
 
@@ -142,9 +147,15 @@ describe('calculateProjection — manual adjustments', () => {
   it('keeps manual fee cells and spreads the remaining fee', () => {
     const r = calculateProjection({
       ...flat,
-      manualCells: [{ series: 'FEE', periodIndex: 1, value: '10000' }],
+      manualCells: [{ series: 'FEE', periodIndex: 2, value: '10000' }],
     });
-    expect(r.fee.map((c) => c.current)).toEqual(['10000.00', '30000.00', '30000.00', '30000.00']);
+    expect(r.fee.map((c) => c.current)).toEqual([
+      '0.00',
+      '10000.00',
+      '30000.00',
+      '30000.00',
+      '30000.00',
+    ]);
     expect(r.totals.fee).toBe('100000.00');
   });
 
@@ -204,7 +215,6 @@ describe('calculateProjection — input validation', () => {
     [{ budget: '-1' }, /negativo/],
     [{ budget: '10.123' }, /2 casas/],
     [{ feeRate: '1.5' }, /entre 0% e 100%/],
-    [{ feeLagMonths: -1 }, /defasagem/],
     [{ curve: toPoints(['0.5']) }, /100%/],
   ])('rejects %o', (patch, message) => {
     expect(() => calculateProjection({ ...base, ...patch })).toThrow(message);
@@ -220,7 +230,6 @@ describe('hydrateProjection', () => {
   it('rebuilds exactly the calculated result from stored values', () => {
     const calculated = calculateProjection({
       ...base,
-      feeLagMonths: 1,
       manualCells: [{ series: 'PHYSICAL', periodIndex: 5, value: '0.05' }],
     });
     const strip = (cells: typeof calculated.physical) =>

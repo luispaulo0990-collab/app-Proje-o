@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/useAuth';
 import { errorMessage } from '@/services/api/client';
 import { ConsolidatedGrid } from './ConsolidatedGrid';
 import { ConsolidatedKpis } from './ConsolidatedKpis';
+import { InccPanel } from './InccPanel';
 import { useConsolidated } from './hooks';
 
 /**
@@ -53,7 +54,7 @@ export function ConsolidatedPage() {
     <>
       <PageHeader
         title="Consolidado"
-        description="Carteira de obras: dados cadastrados, avanço e status vindos da API, taxa do mês, ajuste da projeção de taxa e a projeção mês a mês de cada obra."
+        description="Carteira de obras: dados cadastrados, avanço e status vindos da API, taxa emitida no mês, INCC e a projeção mês a mês de cada obra."
       />
       <div className="-mt-2 mb-5 flex flex-wrap items-center gap-2">
         <Input
@@ -107,6 +108,7 @@ export function ConsolidatedPage() {
       ) : (
         <div className="space-y-5">
           <ConsolidatedKpis data={data} />
+          <InccPanel referenceMonth={data.referenceMonth} canEdit={can('EDITOR')} />
           {needsAttention > 0 && (
             <Alert tone="warning">
               {needsAttention} obra(s) com projeção desatualizada em relação à curva em vigor. Veja
@@ -121,14 +123,16 @@ export function ConsolidatedPage() {
           />
           <p className="text-xs text-text-muted">
             Cada obra ocupa duas linhas — avanço físico e taxa — com os meses no eixo horizontal;
-            coluna destacada = mês de referência e células em amarelo = ajuste manual. Início =
-            primeiro mês da curva própria da obra (API; * = sem curva própria, início da projeção).
-            Término = mês em que a curva atinge 100%. Avanço = Realizado Acumulado da API. Status
-            cliente = Atrasada quando o Replanejado Atual Acumulado - Cliente é menor que a Meta
-            Acumulada - Atual. “Recebida” soma a taxa até a referência (inclusive); “A receber”, os
-            meses seguintes. Ajuste projeção taxa = novo total a receber após{' '}
-            {formatMonth(data.referenceMonth)}, distribuído pela curva nos meses seguintes (gera
-            nova versão da projeção).
+            coluna destacada = mês de referência, células em amarelo = ajuste manual e em verde =
+            taxa emitida. Início = primeiro mês da curva própria da obra (API; * = sem curva
+            própria, início da projeção). Término = mês em que a curva atinge 100%. Avanço =
+            Realizado Acumulado da API. Status cliente = Atrasada quando o Replanejado Atual
+            Acumulado - Cliente é menor que a Meta Acumulada - Atual. “Recebida” soma a taxa até a
+            referência (inclusive); “A receber”, os meses seguintes. A taxa é recebida no mês
+            seguinte ao avanço (competência M−1). Taxa emitida = valor faturado em{' '}
+            {formatMonth(data.referenceMonth)}; a partir da primeira emissão, o saldo a receber é
+            corrigido pelo INCC do mês anterior e projetado pela curva nos meses seguintes (cada
+            alteração gera nova versão da projeção).
           </p>
         </div>
       )}

@@ -61,7 +61,7 @@ export function ProjectionPage() {
       <Card>
         <CardHeader
           title="Projeção mensal"
-          description="Células em amarelo foram ajustadas manualmente; a coluna destacada é o mês de referência. Edição direta na grade chega na Fase 6."
+          description="Células em amarelo foram ajustadas manualmente e em verde têm taxa emitida; a coluna destacada é o mês de referência. Edição direta na grade chega na Fase 6."
         />
         <div className="p-4">
           <ProjectionPreviewGrid

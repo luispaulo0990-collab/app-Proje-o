@@ -8,7 +8,6 @@
       "units": 205,
       "budget": "29254015.86",
       "feeRate": "0.10000000",
-      "feeLagMonths": 3,
       "startMonth": "2024-08-01",
       "monthly": [
         "0.004",
@@ -42,7 +41,6 @@
       "units": 354,
       "budget": "44187790.05",
       "feeRate": "0.09000000",
-      "feeLagMonths": 3,
       "startMonth": "2025-04-01",
       "monthly": [
         "0.004",
@@ -75,7 +73,6 @@
       "units": 169,
       "budget": "29126390.75",
       "feeRate": "0.09000000",
-      "feeLagMonths": 4,
       "startMonth": "2025-07-01",
       "monthly": [
         "0.004",
@@ -108,7 +105,6 @@
       "units": 150,
       "budget": "23984468.23",
       "feeRate": "0.08000000",
-      "feeLagMonths": 2,
       "startMonth": "2025-04-01",
       "monthly": [
         "0.004",
@@ -141,7 +137,6 @@
       "units": 220,
       "budget": "16793600.47",
       "feeRate": "0.11153840",
-      "feeLagMonths": 0,
       "startMonth": "2022-09-01",
       "monthly": [
         "0",
@@ -185,7 +180,6 @@
       "units": 158,
       "budget": "14729856.65",
       "feeRate": "0.12530857",
-      "feeLagMonths": 0,
       "startMonth": "2022-11-01",
       "monthly": [
         "0",
@@ -227,7 +221,6 @@
       "units": 101,
       "budget": "10048042.14",
       "feeRate": "0.10149994",
-      "feeLagMonths": 1,
       "startMonth": "2023-02-01",
       "monthly": [
         "0.01141448923354434",
@@ -266,7 +259,6 @@
       "units": 165,
       "budget": "15645386.36",
       "feeRate": "0.10149994",
-      "feeLagMonths": 1,
       "startMonth": "2023-02-01",
       "monthly": [
         "0.01",
@@ -306,7 +298,6 @@
       "units": 140,
       "budget": "12951611.94",
       "feeRate": "0.10149994",
-      "feeLagMonths": 1,
       "startMonth": "2023-02-01",
       "monthly": [
         "0.02",
@@ -345,7 +336,6 @@
       "units": 152,
       "budget": "14289116.24",
       "feeRate": "0.09000000",
-      "feeLagMonths": 1,
       "startMonth": "2023-05-01",
       "monthly": [
         "0.0016419298656696816",
@@ -383,7 +373,6 @@
       "units": 238,
       "budget": "20531904.86",
       "feeRate": "0.09000000",
-      "feeLagMonths": 2,
       "startMonth": "2023-08-01",
       "monthly": [
         "0.006567804205860234",
@@ -420,7 +409,6 @@
       "units": 382,
       "budget": "35202398.96",
       "feeRate": "0.09000000",
-      "feeLagMonths": 0,
       "startMonth": "2023-10-01",
       "monthly": [
         "0",
@@ -465,7 +453,6 @@
       "units": 267,
       "budget": "22313250.54",
       "feeRate": "0.09000000",
-      "feeLagMonths": 1,
       "startMonth": "2023-07-01",
       "monthly": [
         "0.002262420569362203",
@@ -509,7 +496,6 @@
       "units": 167,
       "budget": "14847887.12",
       "feeRate": "0.09000000",
-      "feeLagMonths": 2,
       "startMonth": "2024-03-01",
       "monthly": [
         "0.01348408752859495",
@@ -539,7 +525,6 @@
       "units": 230,
       "budget": "19470971.31",
       "feeRate": "0.09000000",
-      "feeLagMonths": 2,
       "startMonth": "2024-03-01",
       "monthly": [
         "0.0044156232163480354",
@@ -573,7 +558,6 @@
       "units": 182,
       "budget": "19439120.00",
       "feeRate": "0.09000000",
-      "feeLagMonths": 1,
       "startMonth": "2024-11-01",
       "monthly": [
         "0.026402113934325122",
@@ -606,7 +590,6 @@
       "units": 215,
       "budget": "21529873.45",
       "feeRate": "0.09000000",
-      "feeLagMonths": 0,
       "startMonth": "2025-04-01",
       "monthly": [
         "0.004",
@@ -639,7 +622,6 @@
       "units": 617,
       "budget": "63989596.07",
       "feeRate": "0.09000000",
-      "feeLagMonths": 1,
       "startMonth": "2024-11-01",
       "monthly": [
         "0.0021666786878664847",
@@ -679,7 +661,6 @@
       "units": 133,
       "budget": "18304640.60",
       "feeRate": "0.07000000",
-      "feeLagMonths": 0,
       "startMonth": "2022-12-01",
       "monthly": [
         "0",
@@ -717,7 +698,6 @@
       "units": 299,
       "budget": "29922819.99",
       "feeRate": "0.09000000",
-      "feeLagMonths": 1,
       "startMonth": "2025-12-01",
       "monthly": [
         "0.004",
@@ -750,7 +730,6 @@
       "units": 174,
       "budget": "23856359.48",
       "feeRate": "0.10000228",
-      "feeLagMonths": 5,
       "startMonth": "2025-06-01",
       "monthly": [
         "0.004",
@@ -783,7 +762,6 @@
       "units": 8,
       "budget": "4679123.07",
       "feeRate": "0.07789248",
-      "feeLagMonths": 1,
       "startMonth": "2023-06-01",
       "monthly": [
         "0.13294721118611175",
@@ -818,7 +796,6 @@
       "units": 32,
       "budget": "9749408.66",
       "feeRate": "0.07999902",
-      "feeLagMonths": 0,
       "startMonth": "2023-07-01",
       "monthly": [
         "0",
@@ -852,7 +829,6 @@
       "units": 1,
       "budget": "2190118.89",
       "feeRate": "0.10058815",
-      "feeLagMonths": 1,
       "startMonth": "2024-01-01",
       "monthly": [
         "0.07142857142857142",
@@ -877,7 +853,6 @@
       "units": 1,
       "budget": "1510909.50",
       "feeRate": "0.19544519",
-      "feeLagMonths": 1,
       "startMonth": "2024-01-01",
       "monthly": [
         "0.07142857142857142",
@@ -902,7 +877,6 @@
       "units": 369,
       "budget": "51752832.96",
       "feeRate": "0.08000000",
-      "feeLagMonths": 2,
       "startMonth": "2024-08-01",
       "monthly": [
         "0.01",
@@ -936,7 +910,6 @@
       "units": 160,
       "budget": "17895233.38",
       "feeRate": "0.11000000",
-      "feeLagMonths": 3,
       "startMonth": "2024-06-01",
       "monthly": [
         "0.006203033912947601",
@@ -968,7 +941,6 @@
       "units": 600,
       "budget": "68971943.04",
       "feeRate": "0.08500000",
-      "feeLagMonths": 2,
       "startMonth": "2023-08-01",
       "monthly": [
         "0.006053350415637323",
@@ -1009,7 +981,6 @@
       "units": 381,
       "budget": "50064382.39",
       "feeRate": "0.09500000",
-      "feeLagMonths": 2,
       "startMonth": "2024-05-01",
       "monthly": [
         "0.005491996055178217",
@@ -1043,7 +1014,6 @@
       "units": 336,
       "budget": "43769488.87",
       "feeRate": "0.09500000",
-      "feeLagMonths": 3,
       "startMonth": "2024-09-01",
       "monthly": [
         "0.00270955035827081",
@@ -1077,7 +1047,6 @@
       "units": 960,
       "budget": "127467544.62",
       "feeRate": "0.09438869",
-      "feeLagMonths": 3,
       "startMonth": "2025-04-01",
       "monthly": [
         "0.002206723346726582",
@@ -1114,7 +1083,6 @@
       "units": 268,
       "budget": "42284736.43",
       "feeRate": "0.11067912",
-      "feeLagMonths": 9,
       "startMonth": "2025-07-01",
       "monthly": [
         "0.004",
@@ -1147,7 +1115,6 @@
       "units": 296,
       "budget": "41279706.60",
       "feeRate": "0.08517000",
-      "feeLagMonths": 2,
       "startMonth": "2025-05-01",
       "monthly": [
         "0.004",
@@ -1183,7 +1150,6 @@
       "units": 736,
       "budget": "93334066.50",
       "feeRate": "0.03213291",
-      "feeLagMonths": 2,
       "startMonth": "2025-05-01",
       "monthly": [
         "0.003",
@@ -1224,7 +1190,6 @@
       "units": 85,
       "budget": "18924694.74",
       "feeRate": "0.10000000",
-      "feeLagMonths": 1,
       "startMonth": "2025-12-01",
       "monthly": [
         "0.004",
@@ -1257,7 +1222,6 @@
       "units": 274,
       "budget": "31961393.45",
       "feeRate": "0.08500000",
-      "feeLagMonths": 4,
       "startMonth": "2025-11-01",
       "monthly": [
         "0.004",
@@ -1290,7 +1254,6 @@
       "units": 1,
       "budget": "11103014.00",
       "feeRate": "0.04101791",
-      "feeLagMonths": 0,
       "startMonth": "2023-01-01",
       "monthly": [
         "0.1655332319379022",

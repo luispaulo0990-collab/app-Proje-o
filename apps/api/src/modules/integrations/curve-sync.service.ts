@@ -1,14 +1,24 @@
 import { EngineValidationError, curveFromCumulativeSeries } from '@unita/engine';
 import type { CurveSyncReportDto } from '@unita/contracts';
 import { actualCurvesRepository } from '../../database/repositories/actual-curves.repository.js';
-import { progressIndicatorsRepository } from '../../database/repositories/consolidated-inputs.repository.js';
+import {
+  economicIndicatorsRepository,
+  progressIndicatorsRepository,
+} from '../../database/repositories/consolidated-inputs.repository.js';
 import { worksRepository } from '../../database/repositories/works.repository.js';
-import type { WorkCurveProvider } from '../../integrations/work-curve-provider.js';
+import { SheetLayoutError } from '../../integrations/microsoft-graph/fisico-geral.parser.js';
+import { GraphError } from '../../integrations/microsoft-graph/graph-client.js';
+import type {
+  EconomicIndicatorProvider,
+  WorkCurveProvider,
+} from '../../integrations/work-curve-provider.js';
 import { matchWorkNames } from '../../integrations/work-name-matcher.js';
 import type { Actor, AppDeps } from '../../types.js';
 import type { ProgressEntry } from '@unita/engine';
 import {
+  canonicalEconomicEntries,
   canonicalProgressEntries,
+  saveEconomicIndicators,
   saveProgressIndicators,
 } from '../portfolio/consolidated-inputs.service.js';
 import {
@@ -17,6 +27,8 @@ import {
 } from '../work-curves/work-curves.service.js';
 
 type Item = CurveSyncReportDto['items'][number];
+type EconomicReport = NonNullable<CurveSyncReportDto['economic']>;
+type WorkList = Awaited<ReturnType<typeof worksRepository.listAll>>;
 
 /**
  * Application service that pulls own curves from a provider and imports them work by work.
@@ -67,11 +79,101 @@ export function createCurveSyncService(deps: AppDeps) {
     return { indicatorMonths: entries.length, indicators: 'SAVED' };
   }
 
+  /**
+   * "IEC Obra" (BD_Econômico, row "Geral"): matched with the same rules as the curves and
+   * stored per work × month. A failure reading this sheet never blocks the curve import.
+   */
+  async function syncEconomic(
+    provider: EconomicIndicatorProvider,
+    works: WorkList,
+    context: { dryRun: boolean; actor: Actor },
+  ): Promise<EconomicReport> {
+    const report: EconomicReport = {
+      description: provider.description,
+      sheetWorks: 0,
+      saved: 0,
+      unchanged: 0,
+      items: [],
+      unmatched: [],
+      readIssues: [],
+    };
+    let read: Awaited<ReturnType<EconomicIndicatorProvider['fetchEconomic']>>;
+    try {
+      read = await provider.fetchEconomic();
+    } catch (err) {
+      if (err instanceof SheetLayoutError || err instanceof GraphError) {
+        report.readIssues.push({ row: 0, message: `IEC Obra não lido: ${err.message}` });
+        return report;
+      }
+      throw err;
+    }
+    report.sheetWorks = read.series.length;
+    report.readIssues.push(...read.issues);
+    const matches = matchWorkNames(
+      read.series.map((c, i) => ({ key: String(i), name: c.workName, client: c.clientName })),
+      works.map((w) => ({ id: w.work.id, name: w.work.name, clientName: w.clientName })),
+    );
+    const workById = new Map(works.map((w) => [w.work.id, w.work]));
+    for (const [i, ext] of read.series.entries()) {
+      const match = matches.get(String(i));
+      const work = match ? workById.get(match.workId) : undefined;
+      if (!match || !work) {
+        report.unmatched.push(ext.workName);
+        continue;
+      }
+      const entries = canonicalEconomicEntries(ext.entries);
+      const last = entries.at(-1) ?? null;
+      const existing = await economicIndicatorsRepository.listByWork(db, work.id);
+      const same =
+        existing.length === entries.length &&
+        existing.every((r, j) => {
+          const e = entries[j];
+          return (
+            e !== undefined &&
+            r.month === e.month &&
+            r.iec === (e.iec ?? null) &&
+            r.projectedResult === (e.projectedResult ?? null)
+          );
+        });
+      let outcome: EconomicReport['items'][number]['outcome'];
+      if (same) {
+        outcome = 'UNCHANGED';
+        report.unchanged++;
+      } else if (context.dryRun) {
+        outcome = 'WOULD_SAVE';
+        report.saved++;
+      } else {
+        await db.transaction((tx) =>
+          saveEconomicIndicators(
+            tx,
+            work.id,
+            { source: provider.source, externalRef: null, entries },
+            context.actor,
+          ),
+        );
+        outcome = 'SAVED';
+        report.saved++;
+      }
+      report.items.push({
+        workId: work.id,
+        workName: work.name,
+        sheetName: ext.workName,
+        match: match.kind,
+        months: entries.length,
+        lastMonth: last?.month ?? null,
+        lastIec: last?.iec ?? null,
+        lastProjectedResult: last?.projectedResult ?? null,
+        outcome,
+      });
+    }
+    return report;
+  }
+
   return {
     async sync(
       provider: WorkCurveProvider,
       actor: Actor,
-      options: { dryRun: boolean },
+      options: { dryRun: boolean; economicProvider?: EconomicIndicatorProvider | null },
     ): Promise<CurveSyncReportDto> {
       const { curves, issues: readIssues } = await provider.fetchCurves();
 
@@ -178,6 +280,10 @@ export function createCurveSyncService(deps: AppDeps) {
         }
       }
 
+      const economic = options.economicProvider
+        ? await syncEconomic(options.economicProvider, works, { dryRun: options.dryRun, actor })
+        : null;
+
       const count = (o: Item['outcome']) => items.filter((i) => i.outcome === o).length;
       return {
         dryRun: options.dryRun,
@@ -199,6 +305,7 @@ export function createCurveSyncService(deps: AppDeps) {
           .filter((w) => !seen.has(w.work.id))
           .map((w) => ({ workId: w.work.id, workName: w.work.name })),
         readIssues,
+        economic,
       };
     },
   };

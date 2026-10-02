@@ -74,7 +74,6 @@ describe('import of "Painel de obras.xlsx" (demo data)', () => {
         units: 1,
         budget: '100.00',
         feeRate: '0.1',
-        feeLagMonths: 0,
         constructionSystem: 'Alvenaria',
         curveVersionId: curve.json().latestVersionId,
         startDate: '2026-01-01',

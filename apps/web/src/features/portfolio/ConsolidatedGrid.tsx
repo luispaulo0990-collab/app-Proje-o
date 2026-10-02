@@ -2,11 +2,12 @@ import { memo, useMemo, type ReactNode, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import type { ConsolidatedDto, ConsolidatedWorkDto } from '@unita/contracts';
 import { Badge } from '@/components/ui';
+import { CELL_ORIGIN } from '@/features/projections/cellOrigin';
 import { CURVE_SOURCE } from '@/features/work-curves/curveStatus';
 import { cn } from '@/utils/cn';
 import { formatCurrency, formatMonth, formatNumber, formatPercent } from '@/utils/format';
-import { ClientStatus, Progress, sub } from './ConsolidatedCells';
-import { FeeRecalibrationCell } from './FeeRecalibrationCell';
+import { ClientStatus, EconomicIndex, Progress, sub } from './ConsolidatedCells';
+import { FeeIssuanceCell } from './FeeIssuanceCell';
 
 type Month = ConsolidatedDto['months'][number];
 type Totals = ConsolidatedDto['totals'];
@@ -104,6 +105,13 @@ const PANEL_COLUMNS: PanelColumn[] = [
     render: (w) => <ClientStatus progress={w.progress} />,
   },
   {
+    key: 'iec',
+    label: 'IEC obra / resultado',
+    detail: true,
+    className: 'text-right',
+    render: (w) => <EconomicIndex economic={w.economic} />,
+  },
+  {
     key: 'feeProjected',
     label: 'Taxa prevista',
     detail: true,
@@ -134,13 +142,13 @@ const PANEL_COLUMNS: PanelColumn[] = [
     render: (w) => formatCurrency(w.feeRemaining),
   },
   {
-    key: 'recalibration',
-    label: 'Ajuste projeção taxa',
+    key: 'issuance',
+    label: 'Taxa emitida no mês',
     className: 'bg-primary-soft/40 border-r',
     headClassName: 'bg-primary text-white border-r',
-    total: (t) => (t.recalibratedWorks > 0 ? `${t.recalibratedWorks} ajustada(s)` : ''),
+    total: (t) => (t.issuedWorksAtReference > 0 ? `${t.issuedWorksAtReference} emitida(s)` : ''),
     render: (w, ctx) => (
-      <FeeRecalibrationCell work={w} referenceMonth={ctx.referenceMonth} canEdit={ctx.canEdit} />
+      <FeeIssuanceCell work={w} referenceMonth={ctx.referenceMonth} canEdit={ctx.canEdit} />
     ),
   },
 ];
@@ -179,7 +187,7 @@ function HeaderRows({ data, columns }: { data: ConsolidatedDto; columns: PanelCo
               'sticky z-20 h-12 min-w-28 bg-ink-900 text-center text-[11px] font-semibold uppercase leading-tight text-white',
               HEAD_ROW_TOP[0],
               headCell,
-              c.key === 'recalibration' && 'min-w-48',
+              c.key === 'issuance' && 'min-w-48',
               c.headClassName,
             )}
           >
@@ -224,7 +232,7 @@ function HeaderRows({ data, columns }: { data: ConsolidatedDto; columns: PanelCo
                   top,
                   headCell,
                   c.className?.includes('text-center') ? 'text-center' : 'text-right',
-                  c.key === 'recalibration' && 'border-r text-text-muted',
+                  c.key === 'issuance' && 'border-r text-text-muted',
                 )}
               >
                 {r === 0 ? c.total?.(t) : null}
@@ -329,17 +337,17 @@ const WorkRows = memo(function WorkRows({
             ))}
           {months.map((m) => {
             const cell = s.cells.get(m.month);
-            const manual = cell?.origin === 'MANUAL';
+            const origin = cell ? CELL_ORIGIN[cell.origin] : undefined;
             return (
               <td
                 key={m.month}
-                title={manual ? 'Ajuste manual' : undefined}
+                title={origin?.title}
                 className={cn(
                   bodyCell,
                   'tabular group-hover:bg-ink-50',
                   s.key === 'physical' ? 'text-text-muted' : 'font-medium',
-                  manual && 'bg-cell-manual',
-                  m.isReference && !manual && 'bg-cell-current-period/60',
+                  origin?.className,
+                  m.isReference && !origin && 'bg-cell-current-period/60',
                 )}
               >
                 {cell && !ZERO.test(cell.value) ? s.format(cell.value) : ''}

@@ -13,7 +13,7 @@ import { projections, works } from './schema/index.js';
 /**
  * Works of the "Painel (2)" sheet of "Painel de obras.xlsx", extracted to
  * `data/painel-obras.json` (one entry per work: client, name, UH, orçamento raso, % taxa,
- * defasagem da taxa, mês de início e o avanço físico mensal da própria planilha).
+ * mês de início e o avanço físico mensal da própria planilha).
  */
 interface PainelWork {
   client: string;
@@ -21,7 +21,6 @@ interface PainelWork {
   units: number;
   budget: string;
   feeRate: string;
-  feeLagMonths: number;
   startMonth: string;
   monthly: string[];
 }
@@ -99,7 +98,6 @@ export async function importPainelWorks(
         units: Math.max(1, p.units),
         budget: p.budget,
         feeRate: p.feeRate,
-        feeLagMonths: p.feeLagMonths,
         constructionSystem: 'Não informado',
         curveVersionId: parametricCurveVersionId,
         startDate: p.startMonth,

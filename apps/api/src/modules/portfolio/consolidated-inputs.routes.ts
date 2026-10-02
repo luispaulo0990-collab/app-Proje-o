@@ -1,18 +1,13 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import {
+  economicIndicatorsBody,
+  economicIndicatorsDto,
   errorResponse,
-  feeRecalibrationBody,
-  feeRecalibrationResponse,
   idParams,
   progressIndicatorsBody,
   progressIndicatorsDto,
 } from '@unita/contracts';
-import {
-  currentActor,
-  currentUser,
-  requireRole,
-  requireRoleOrApiKey,
-} from '../../middleware/auth.js';
+import { currentActor, requireRoleOrApiKey } from '../../middleware/auth.js';
 import { createConsolidatedInputsService } from './consolidated-inputs.service.js';
 
 const errors = {
@@ -22,7 +17,6 @@ const errors = {
   404: errorResponse,
   422: errorResponse,
 };
-const bearer: Record<string, string[]>[] = [{ bearerAuth: [] }];
 const bearerOrKey: Record<string, string[]>[] = [{ bearerAuth: [] }, { integrationKey: [] }];
 
 /** Inputs of the "Consolidado" for one work — mounted under /works/:id. */
@@ -66,37 +60,38 @@ export const consolidatedInputsRoutes: FastifyPluginAsyncZod = async (app) => {
     async (req) => service.putProgress(req.params.id, req.body, currentActor(req)),
   );
 
-  app.put(
-    '/:id/fee-recalibration',
+  app.get(
+    '/:id/economic-indicators',
     {
-      preHandler: requireRole('EDITOR'),
+      preHandler: requireRoleOrApiKey('VIEWER'),
       schema: {
         tags,
-        security: bearer,
-        summary: 'Ajuste projeção de taxa: novo total a receber após o mês de referência',
-        description:
-          'O valor é distribuído pela curva nos meses seguintes ao mês de referência; ' +
-          'gera nova versão da projeção preservando ajustes manuais.',
+        security: bearerOrKey,
+        summary: 'Fechamentos econômicos da obra (IEC Obra, resultado projetado)',
         params: idParams,
-        body: feeRecalibrationBody,
-        response: { 200: feeRecalibrationResponse, ...errors },
+        response: { 200: economicIndicatorsDto, ...errors },
       },
     },
-    async (req) => service.setRecalibration(req.params.id, req.body, currentUser(req)),
+    async (req) => service.getEconomic(req.params.id),
   );
 
-  app.delete(
-    '/:id/fee-recalibration',
+  app.put(
+    '/:id/economic-indicators',
     {
-      preHandler: requireRole('EDITOR'),
+      preHandler: requireRoleOrApiKey('EDITOR'),
       schema: {
         tags,
-        security: bearer,
-        summary: 'Remove o ajuste de taxa (volta a orçamento × taxa pela curva)',
+        security: bearerOrKey,
+        summary: 'Recebe os fechamentos econômicos mensais da obra (substitui o histórico)',
+        description:
+          '`iec` = "IEC Obra" (1.02 = 102%); `projectedResult` = "Resultado Projetado Obra" em R$ ' +
+          '(negativo = prejuízo). O Consolidado mostra o último fechamento até o mês de referência; ' +
+          'IEC 0 é tratado como "sem fechamento".',
         params: idParams,
-        response: { 200: feeRecalibrationResponse, ...errors },
+        body: economicIndicatorsBody,
+        response: { 200: economicIndicatorsDto, ...errors },
       },
     },
-    async (req) => service.clearRecalibration(req.params.id, currentUser(req)),
+    async (req) => service.putEconomic(req.params.id, req.body, currentActor(req)),
   );
 };

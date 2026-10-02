@@ -125,7 +125,6 @@ describe('buildConsolidatedPanel', () => {
     curve: FLAT_4,
     budget: '400000.00',
     feeRate: '0.10',
-    feeLagMonths: 1,
   });
   const panel = buildConsolidatedPanel(
     [
@@ -138,8 +137,8 @@ describe('buildConsolidatedPanel', () => {
   it('flags the reference month and totals per year', () => {
     expect(panel.months.filter((m) => m.isReference).map((m) => m.label)).toEqual(['JAN/27']);
     expect(panel.years).toEqual([
-      { year: 2026, feeTotal: '50000.00' },
-      { year: 2027, feeTotal: '90000.00' },
+      { year: 2026, feeTotal: '25000.00' },
+      { year: 2027, feeTotal: '115000.00' },
     ]);
   });
 
@@ -148,8 +147,8 @@ describe('buildConsolidatedPanel', () => {
       {
         workId: 'a',
         feeProjected: '100000.00',
-        feeRealized: '75000.00',
-        feeRemaining: '25000.00',
+        feeRealized: '50000.00',
+        feeRemaining: '50000.00',
         feeAtReference: '25000.00',
         physicalAccumulated: '0.75000000',
         activeAtReference: true,
@@ -168,8 +167,8 @@ describe('buildConsolidatedPanel', () => {
       worksCount: 2,
       activeWorksAtReference: 2,
       feeProjected: '140000.00',
-      feeRealized: '75000.00',
-      feeRemaining: '65000.00',
+      feeRealized: '50000.00',
+      feeRemaining: '90000.00',
       feeAtReference: '25000.00',
       feeYearToDateAtReference: '25000.00',
     });

@@ -11,7 +11,10 @@ import { createDatabase } from '../database/client.js';
 import { createCurveSyncService } from '../modules/integrations/curve-sync.service.js';
 import { createMailer } from '../services/mailer.js';
 import { JwtService } from '../modules/auth/jwt.js';
-import { graphProviderFromEnv } from './microsoft-graph/graph-work-curve-provider.js';
+import {
+  graphEconomicProviderFromEnv,
+  graphProviderFromEnv,
+} from './microsoft-graph/graph-work-curve-provider.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -29,7 +32,10 @@ async function main(): Promise<void> {
     const report = await service.sync(
       provider,
       { user: null, integration: 'cron:microsoft-graph' },
-      { dryRun: process.argv.includes('--dry') },
+      {
+        dryRun: process.argv.includes('--dry'),
+        economicProvider: graphEconomicProviderFromEnv(env),
+      },
     );
     console.warn(JSON.stringify(report.totals));
     for (const u of report.unmatched) console.warn(`Obra da planilha sem cadastro: ${u.sheetName}`);
@@ -37,6 +43,12 @@ async function main(): Promise<void> {
       console.warn(
         `Curva rejeitada (${i.workName}): ${i.issues.map((x) => x.message).join(' | ')}`,
       );
+    if (report.economic) {
+      const e = report.economic;
+      console.warn(`IEC Obra: ${e.saved} obra(s) gravada(s), ${e.unchanged} sem alteração.`);
+      for (const u of e.unmatched) console.warn(`IEC Obra — obra da planilha sem cadastro: ${u}`);
+      for (const i of e.readIssues) console.warn(`IEC Obra — linha ${i.row}: ${i.message}`);
+    }
   } finally {
     await db.close();
   }

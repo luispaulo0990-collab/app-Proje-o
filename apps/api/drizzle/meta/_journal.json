@@ -22,6 +22,27 @@
       "when": 1790781663129,
       "tag": "0002_consolidated_indicators",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790868446870,
+      "tag": "0003_fee_issuances_incc",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790968861982,
+      "tag": "0004_economic_indicators",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790970061750,
+      "tag": "0005_incc_indices",
+      "breakpoints": true
     }
   ]
 }
