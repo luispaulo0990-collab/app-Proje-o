@@ -6,6 +6,7 @@ cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 goto :sem_node
 
+if not exist .env if exist supabase.env.txt ren supabase.env.txt .env
 if not exist .env goto :sem_env
 findstr /b /c:"DATABASE_URL=postgres" .env >nul
 if errorlevel 1 goto :sem_env

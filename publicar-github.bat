@@ -20,7 +20,7 @@ echo -------------------------------------
 git status --short
 echo -------------------------------------
 echo.
-echo Confira a lista acima. O arquivo integracao-microsoft.txt NAO deve aparecer.
+echo Confira a lista acima. NAO devem aparecer: .env, supabase.env.txt, integracao-microsoft.txt.
 choice /c SN /m "Enviar para o GitHub agora"
 if errorlevel 2 (
   git reset -q
@@ -29,7 +29,7 @@ if errorlevel 2 (
   exit /b 0
 )
 
-git commit -q -m "feat: taxa emitida + INCC por numero-indice, coluna IEC Obra no Consolidado" -m "- Taxa emitida mensal por obra e correcao do saldo pelo INCC (competencia M-1)" -m "- INCC cadastrado como numero-indice; o motor deriva a variacao. Historico INCC-DI (FGV) AGO/1994-AGO/2026 (migration 0005_incc_indices)" -m "- Coluna IEC obra / resultado no Consolidado (aba BD_Economico; migration 0004_economic_indicators)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -m "Claude-Session: https://claude.ai/code/session_01SUJXDwVZxpp9SDQWQzwJr4"
+git commit -q -m "chore: banco no Supabase e limpeza do repositorio" -m "- Conexao PostgreSQL do Supabase (pooler de transacao/sessao, TLS) e Data API fechada (RLS)" -m "- Copia conferida do banco da demonstracao para o Supabase (npm run db:copy)" -m "- Remove arquivos locais sem uso (copia antiga unita-projecoes, prints, apresentacao)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -m "Claude-Session: https://claude.ai/code/session_01Vkwy7rC7djLfFfiZzRoPsj"
 if errorlevel 1 (
   echo Nenhuma alteracao nova para enviar, ou falha no commit.
 )

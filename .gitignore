@@ -11,3 +11,10 @@ coverage
 .demo-data
 # Credenciais locais da integração Microsoft (não versionar)
 integracao-microsoft.txt
+# Conexões do Supabase antes de virar .env (não versionar)
+supabase.env.txt
+# Arquivos locais que nao fazem parte do codigo
+Claude outputs/
+unita-projecoes/
+*.pptx
+*.xlsx
