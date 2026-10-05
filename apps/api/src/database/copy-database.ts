@@ -15,7 +15,14 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
-import { createDatabase, EMBEDDED_PREFIX, isEmbeddedUrl, migrationUrl, type Db } from './client.js';
+import {
+  createDatabase,
+  DUMP_PREFIX,
+  EMBEDDED_PREFIX,
+  isEmbeddedUrl,
+  migrationUrl,
+  type Db,
+} from './client.js';
 import { migrateDatabase } from './migrate.js';
 import { syncSupabaseAuthUsers } from './supabase-auth-sync.js';
 import { queryRows } from './raw-query.js';
@@ -198,15 +205,22 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
   const demoDb = join(repoRoot, '.demo-data', 'db');
-  const from = argValue(args, '--origem') ?? `${EMBEDDED_PREFIX}${demoDb}`;
+  // Backup recovered from a damaged demo database (when present) takes precedence.
+  const recovered = join(repoRoot, '.demo-data', 'recuperado.tar.gz');
+  const from =
+    argValue(args, '--origem') ??
+    (existsSync(recovered)
+      ? `${EMBEDDED_PREFIX}${DUMP_PREFIX}${recovered}`
+      : `${EMBEDDED_PREFIX}${demoDb}`);
   const to = argValue(args, '--destino') ?? migrationUrl();
   if (!to || isEmbeddedUrl(to)) {
     throw new Error(
       'Destino não definido: preencha DATABASE_MIGRATION_URL (ou DATABASE_URL) no arquivo .env com a conexão do Supabase.',
     );
   }
-  if (isEmbeddedUrl(from) && !existsSync(from.slice(EMBEDDED_PREFIX.length))) {
-    throw new Error(`Banco de origem não encontrado em ${from.slice(EMBEDDED_PREFIX.length)}.`);
+  const sourcePath = from.slice(EMBEDDED_PREFIX.length).replace(DUMP_PREFIX, '');
+  if (isEmbeddedUrl(from) && !existsSync(sourcePath)) {
+    throw new Error(`Banco de origem não encontrado em ${sourcePath}.`);
   }
 
   console.warn(`Origem:  ${describe(from)}\nDestino: ${describe(to)}\n`);

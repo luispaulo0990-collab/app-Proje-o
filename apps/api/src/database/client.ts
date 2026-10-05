@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle as drizzleNodePg } from 'drizzle-orm/node-postgres';
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
@@ -18,8 +18,12 @@ export type Database = Db & { close: () => Promise<void>; driver: 'postgres' | '
  * - `postgres://…`   → PostgreSQL server (Supabase, VPS, local) — development and production
  * - `pglite:<pasta>` → PostgreSQL embarcado (PGlite/WASM) gravado em disco — modo demonstração
  * - `pglite:memory`  → PostgreSQL embarcado em memória
+ * - `pglite:dump=<arquivo.tar.gz>` → cópia em memória de um backup do banco embarcado (dumpDataDir)
  */
 export const EMBEDDED_PREFIX = 'pglite:';
+
+/** `pglite:dump=<file>`: in-memory copy of a PGlite data-dir archive (read only on disk). */
+export const DUMP_PREFIX = 'dump=';
 
 export function isEmbeddedUrl(url: string): boolean {
   return url.startsWith(EMBEDDED_PREFIX);
@@ -40,6 +44,12 @@ pg.types.setTypeParser(1082, (v) => v);
 
 function createEmbedded(url: string): Database {
   const location = url.slice(EMBEDDED_PREFIX.length);
+  if (location.startsWith(DUMP_PREFIX)) {
+    const archive = readFileSync(location.slice(DUMP_PREFIX.length));
+    const fromDump = new PGlite({ loadDataDir: new Blob([archive]) });
+    const db = drizzlePglite(fromDump, { schema }) as unknown as Db;
+    return Object.assign(db, { close: () => fromDump.close(), driver: 'pglite' as const });
+  }
   const inMemory = location === '' || location === 'memory';
   if (!inMemory) mkdirSync(location, { recursive: true });
   const client = inMemory ? new PGlite() : new PGlite(location);
