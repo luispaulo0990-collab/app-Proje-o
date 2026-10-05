@@ -7,6 +7,7 @@ import { CurvePointsTable } from '@/features/curves/CurvePointsTable';
 import { useCurveVersion } from '@/features/curves/hooks';
 import { errorMessage } from '@/services/api/client';
 import { ActualCurvePanel } from '@/features/work-curves/ActualCurvePanel';
+import { useActualCurve } from '@/features/work-curves/hooks';
 import { cn } from '@/utils/cn';
 import { useWorkContext } from './WorkLayout';
 
@@ -15,6 +16,10 @@ type Tab = 'parametric' | 'actual';
 export function WorkCurvePage() {
   const w = useWorkContext();
   const [tab, setTab] = useState<Tab>('parametric');
+  const actual = useActualCurve(w.id);
+  if (actual.isLoading) return <Skeleton className="h-96" />;
+  // A work with its own curve shows only it: the standard (parametric) curve would mislead.
+  if (actual.data?.current) return <ActualCurvePanel workId={w.id} startDate={w.startDate} />;
   return (
     <div className="space-y-5">
       <div className="flex w-fit rounded-control border border-border bg-surface p-0.5 text-sm">

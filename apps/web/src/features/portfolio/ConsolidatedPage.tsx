@@ -12,6 +12,25 @@ import { ConsolidatedKpis } from './ConsolidatedKpis';
 import { InccPanel } from './InccPanel';
 import { useConsolidated } from './hooks';
 
+const INCC_PREF = 'unita.consolidado.incc';
+
+/** Browser storage may be unavailable (private mode, blocked): preferences are best effort. */
+function readPreference(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writePreference(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * "Consolidado": the "Painel de obras" columns and the month-by-month projection (physical
  * progress and fee) in one grid, like the "Painel (2)" sheet.
@@ -30,6 +49,13 @@ export function ConsolidatedPage() {
       },
       { replace: true },
     );
+  // INCC panel visibility is remembered per browser (hidden = more room for the grid).
+  const [showIncc, setShowIncc] = useState(() => readPreference(INCC_PREF) !== 'hidden');
+  const toggleIncc = () =>
+    setShowIncc((v) => {
+      writePreference(INCC_PREF, v ? 'hidden' : 'visible');
+      return !v;
+    });
   const gridRef = useRef<HTMLDivElement>(null);
   const [reference, setReference] = useState('');
   const [q, setQ] = useState('');
@@ -67,6 +93,15 @@ export function ConsolidatedPage() {
         <ReferenceMonthInput value={reference} onChange={setReference} />
         {data && (
           <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={toggleIncc}
+              aria-expanded={showIncc}
+              aria-controls="painel-incc"
+            >
+              {showIncc ? 'Ocultar INCC' : 'Mostrar INCC'}
+            </Button>
             <Button variant="secondary" size="sm" onClick={toggleDetails}>
               {showDetails ? 'Ocultar colunas do painel' : 'Mostrar colunas do painel'}
             </Button>
@@ -108,7 +143,11 @@ export function ConsolidatedPage() {
       ) : (
         <div className="space-y-5">
           <ConsolidatedKpis data={data} />
-          <InccPanel referenceMonth={data.referenceMonth} canEdit={can('EDITOR')} />
+          {showIncc && (
+            <div id="painel-incc">
+              <InccPanel referenceMonth={data.referenceMonth} canEdit={can('EDITOR')} />
+            </div>
+          )}
           {needsAttention > 0 && (
             <Alert tone="warning">
               {needsAttention} obra(s) com projeção desatualizada em relação à curva em vigor. Veja
