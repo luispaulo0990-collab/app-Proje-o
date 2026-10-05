@@ -3,7 +3,6 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
-import fastifyStatic from '@fastify/static';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { sql } from 'drizzle-orm';
@@ -139,6 +138,9 @@ export async function buildApp({
 
   // Single-process mode (demo): the API also serves the compiled web app.
   if (env.SERVE_WEB_DIR) {
+    // Loaded on demand: @fastify/static pulls an ESM-only dependency that serverless
+    // runtimes without require(esm) (Vercel) cannot load — and they never serve files here.
+    const { default: fastifyStatic } = await import('@fastify/static');
     await app.register(fastifyStatic, { root: env.SERVE_WEB_DIR, wildcard: false });
   }
 
