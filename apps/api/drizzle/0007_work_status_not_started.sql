@@ -1,0 +1,1 @@
+ALTER TYPE "public"."work_status" ADD VALUE 'NOT_STARTED' BEFORE 'ACTIVE';

@@ -146,6 +146,21 @@ describe('PUT /works/:id/progress-indicators', () => {
     });
     expect(body.totals.delayedWorks).toBe(1);
 
+    // Work detail: "% físico acumulado" shows the realized cumulative of the latest closing.
+    const kpis = async (ref: string) =>
+      (
+        await ctx.app.inject({
+          url: `/api/v1/projections/${workId}?referenceDate=${ref}`,
+          headers: auth(admin),
+        })
+      ).json().kpis;
+    expect(await kpis('2027-07-15')).toMatchObject({
+      physicalRealized: '0.16900000',
+      physicalRealizedMonth: '2027-06-01',
+    });
+    expect(await kpis('2027-05-31')).toMatchObject({ physicalRealized: '0.14100000' });
+    expect((await kpis('2027-04-30')).physicalRealized).toBeNull();
+
     const history = (
       await ctx.app.inject({ url: `/api/v1/works/${workId}/audit`, headers: auth(admin) })
     ).json();

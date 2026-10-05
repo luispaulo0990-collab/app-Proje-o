@@ -17,7 +17,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-30 border-b-2 border-primary bg-secondary">
-        <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-6 px-4">
+        <div className="flex h-14 w-full items-center gap-6 px-4 lg:px-6 2xl:px-10">
           <NavLink to="/obras" aria-label="Início">
             <img src={logoWhite} alt="Unità Engenharia" className="h-7" />
           </NavLink>
@@ -48,7 +48,7 @@ export function AppShell() {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6">
+      <main className="w-full flex-1 px-4 py-6 lg:px-6 2xl:px-10">
         <Outlet />
       </main>
     </div>

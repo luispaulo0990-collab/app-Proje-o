@@ -3,6 +3,7 @@ import {
   FEE_COMPETENCE_LAG_MONTHS,
   calculateProjection,
   computeKpis,
+  computeProgressIndicators,
   hydrateProjection,
   monthIndexIn,
   resolveEffectiveCurve,
@@ -25,6 +26,10 @@ import {
   type ActualCurveWithPoints,
 } from '../../database/repositories/actual-curves.repository.js';
 import { auditRepository, type AuditEntry } from '../../database/repositories/audit.repository.js';
+import {
+  progressIndicatorsRepository,
+  toProgressEntry,
+} from '../../database/repositories/consolidated-inputs.repository.js';
 import { curvesRepository } from '../../database/repositories/curves.repository.js';
 import {
   feeIssuancesRepository,
@@ -295,6 +300,16 @@ export function createProjectionsService({ db }: AppDeps) {
     return { ...current, values };
   }
 
+  /** Measured progress ("Realizado Acumulado") of the latest closing ≤ reference month. */
+  async function realizedProgress(workId: string, referenceMonth: string) {
+    const rows = await progressIndicatorsRepository.listByWork(db, workId);
+    const { realizedCumulative, realizedMonth } = computeProgressIndicators(
+      rows.map(toProgressEntry),
+      referenceMonth,
+    );
+    return { physicalRealized: realizedCumulative, physicalRealizedMonth: realizedMonth };
+  }
+
   async function toDto(workId: string, referenceDate?: string): Promise<ProjectionDto> {
     await loadWork(db, workId);
     const { projection, createdBy, values } = await loadCurrent(db, workId);
@@ -315,7 +330,10 @@ export function createProjectionsService({ db }: AppDeps) {
       fee: result.fee,
       totals: result.totals,
       manualCount: result.parameters.manualCount,
-      kpis: computeKpis(result, referenceMonth),
+      kpis: {
+        ...computeKpis(result, referenceMonth),
+        ...(await realizedProgress(workId, referenceMonth)),
+      },
       validations: result.validations,
     };
   }

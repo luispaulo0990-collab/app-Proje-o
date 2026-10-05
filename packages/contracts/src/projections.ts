@@ -24,6 +24,13 @@ export const kpisDto = z.object({
   feeRemaining: z.string(),
   physicalProjected: z.string(),
   physicalAccumulated: z.string(),
+  /**
+   * "Realizado Acumulado" (BD_Infos Gerais) of the latest closing ≤ reference month — the
+   * measured physical progress. null when the work has no realized data yet.
+   */
+  physicalRealized: z.string().nullable().optional(),
+  /** Closing month of `physicalRealized` (YYYY-MM-01). */
+  physicalRealizedMonth: z.string().nullable().optional(),
   durationMonths: z.number().int(),
   elapsedMonths: z.number().int(),
   endDate: z.string(),

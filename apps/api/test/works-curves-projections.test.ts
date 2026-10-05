@@ -285,6 +285,23 @@ describe('works + projections', () => {
     ]);
   });
 
+  it('accepts the "Não iniciada" status (NOT_STARTED) and filters by it', async () => {
+    const work = await createWork();
+    const res = await ctx.app.inject({
+      method: 'PUT',
+      url: `/api/v1/works/${work.id}`,
+      headers: auth(admin),
+      payload: workPayload(curveVersionId, { status: 'NOT_STARTED' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('NOT_STARTED');
+    const list = await ctx.app.inject({
+      url: '/api/v1/works?status=NOT_STARTED',
+      headers: auth(admin),
+    });
+    expect(list.json().items.map((w: { id: string }) => w.id)).toContain(work.id);
+  });
+
   it('changing calc inputs regenerates automatically without manual cells, flags stale with them', async () => {
     const work = await createWork();
     const put = (patch: Record<string, unknown>) =>

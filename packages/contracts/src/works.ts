@@ -8,7 +8,13 @@ import {
   uuid,
 } from './common.js';
 
-export const workStatusSchema = z.enum(['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED']);
+export const workStatusSchema = z.enum([
+  'DRAFT',
+  'NOT_STARTED',
+  'ACTIVE',
+  'COMPLETED',
+  'ARCHIVED',
+]);
 export type WorkStatus = z.infer<typeof workStatusSchema>;
 
 export const workBody = z.object({

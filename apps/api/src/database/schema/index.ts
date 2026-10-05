@@ -31,7 +31,13 @@ const money = (name: string) => numeric(name, { precision: 18, scale: 2 });
 const fraction = (name: string) => numeric(name, { precision: 12, scale: 8 });
 
 export const roleEnum = pgEnum('user_role', ['ADMIN', 'EDITOR', 'VIEWER']);
-export const workStatusEnum = pgEnum('work_status', ['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED']);
+export const workStatusEnum = pgEnum('work_status', [
+  'DRAFT',
+  'NOT_STARTED',
+  'ACTIVE',
+  'COMPLETED',
+  'ARCHIVED',
+]);
 export const curveTypeEnum = pgEnum('curve_type', ['PHYSICAL']);
 export const curveStatusEnum = pgEnum('curve_status', ['ACTIVE', 'ARCHIVED']);
 export const seriesEnum = pgEnum('projection_series', ['PHYSICAL', 'FEE']);
