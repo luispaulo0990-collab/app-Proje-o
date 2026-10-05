@@ -1,12 +1,22 @@
 /**
  * Minimal Microsoft Graph client (app-only / client credentials). No SDK dependency: two
  * HTTPS calls, token cached until shortly before expiry. `fetch` is injectable for tests.
+ *
+ * Two ways to prove the app's identity to Entra ID:
+ * - **federated** (preferred, no secret): the deployment's OIDC token (Vercel) is sent as
+ *   `client_assertion`; Entra trusts it through a federated credential on the app registration;
+ * - **client secret**: fallback while the federated credential is not configured.
  */
 export interface GraphCredentials {
   tenantId: string;
   clientId: string;
-  clientSecret: string;
+  /** Optional when a federated assertion is available. */
+  clientSecret?: string | null;
+  /** Returns the current workload identity token (Vercel OIDC), or null when not running there. */
+  federatedAssertion?: () => string | null;
 }
+
+const JWT_BEARER = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
 
 export class GraphError extends Error {
   constructor(
@@ -31,10 +41,12 @@ export class GraphClient {
     private readonly fetchImpl: Fetch = fetch,
   ) {}
 
-  private async accessToken(): Promise<string> {
-    if (this.token && Date.now() < this.token.expiresAt) return this.token.value;
-    const { tenantId, clientId, clientSecret } = this.credentials;
-    const res = await this.fetchImpl(
+  /** How the last token was obtained — shown in the integration status. */
+  lastMethod: 'federated' | 'secret' | null = null;
+
+  private async requestToken(proof: Record<string, string>): Promise<Response> {
+    const { tenantId, clientId } = this.credentials;
+    return this.fetchImpl(
       `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`,
       {
         method: 'POST',
@@ -42,12 +54,37 @@ export class GraphClient {
         body: new URLSearchParams({
           grant_type: 'client_credentials',
           client_id: clientId,
-          client_secret: clientSecret,
           scope: 'https://graph.microsoft.com/.default',
+          ...proof,
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       },
     );
+  }
+
+  private async accessToken(): Promise<string> {
+    if (this.token && Date.now() < this.token.expiresAt) return this.token.value;
+    const { clientSecret } = this.credentials;
+    const assertion = this.credentials.federatedAssertion?.() ?? null;
+    let res: Response | null = null;
+    if (assertion) {
+      res = await this.requestToken({
+        client_assertion_type: JWT_BEARER,
+        client_assertion: assertion,
+      });
+      this.lastMethod = 'federated';
+    }
+    // Federated credential missing/misconfigured (or not on Vercel) → client secret, if any.
+    if ((!res || !res.ok) && clientSecret) {
+      res = await this.requestToken({ client_secret: clientSecret });
+      this.lastMethod = 'secret';
+    }
+    if (!res) {
+      throw new GraphError(
+        'Sem credencial para a Microsoft: configure a credencial federada (Vercel) ou MS_GRAPH_CLIENT_SECRET.',
+        401,
+      );
+    }
     const body = (await res.json().catch(() => ({}))) as {
       access_token?: string;
       expires_in?: number;

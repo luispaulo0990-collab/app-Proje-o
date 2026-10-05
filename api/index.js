@@ -29,6 +29,10 @@ function getApp() {
 }
 
 export default async function handler(req, res) {
+  // Vercel OIDC token of this deployment (only available per request): used to sign in to
+  // Microsoft Graph through workload identity federation, without any client secret.
+  const oidc = req.headers['x-vercel-oidc-token'];
+  if (typeof oidc === 'string' && oidc) process.env.VERCEL_OIDC_TOKEN = oidc;
   const app = await getApp();
   app.server.emit('request', req, res);
 }

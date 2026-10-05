@@ -144,7 +144,8 @@ function splitKey(entry: string): [string, string] {
 export interface GraphConfig {
   tenantId: string;
   clientId: string;
-  clientSecret: string;
+  /** null = federated only (Vercel OIDC). */
+  clientSecret: string | null;
   driveId: string;
   itemId: string;
   sheet: string;
@@ -206,13 +207,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     graph:
       env.MS_GRAPH_TENANT_ID &&
       env.MS_GRAPH_CLIENT_ID &&
-      env.MS_GRAPH_CLIENT_SECRET &&
+      // Secret, or workload identity federation when running on Vercel (no secret needed).
+      (env.MS_GRAPH_CLIENT_SECRET || source.VERCEL === '1') &&
       env.MS_GRAPH_DRIVE_ID &&
       env.MS_GRAPH_ITEM_ID
         ? {
             tenantId: env.MS_GRAPH_TENANT_ID,
             clientId: env.MS_GRAPH_CLIENT_ID,
-            clientSecret: env.MS_GRAPH_CLIENT_SECRET,
+            clientSecret: env.MS_GRAPH_CLIENT_SECRET || null,
             driveId: env.MS_GRAPH_DRIVE_ID,
             itemId: env.MS_GRAPH_ITEM_ID,
             sheet: env.MS_GRAPH_SHEET_FISICO_GERAL,

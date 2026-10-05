@@ -88,7 +88,12 @@ function graphClientFromEnv(env: Env, fetchImpl?: typeof fetch): GraphClient | n
   const existing = byFetch.get(fetchImpl);
   if (existing) return existing;
   const client = new GraphClient(
-    { tenantId: g.tenantId, clientId: g.clientId, clientSecret: g.clientSecret },
+    {
+      tenantId: g.tenantId,
+      clientId: g.clientId,
+      clientSecret: g.clientSecret,
+      federatedAssertion: () => process.env.VERCEL_OIDC_TOKEN || null,
+    },
     fetchImpl,
   );
   byFetch.set(fetchImpl, client);

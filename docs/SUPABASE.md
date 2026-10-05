@@ -84,8 +84,20 @@ O build da Vercel (`npm run build:vercel`) já aplica as migrations e a carga id
   `GET /api/v1/integrations/work-curves/cron` com `Authorization: Bearer CRON_SECRET`
   (variável `CRON_SECRET` na Vercel). No histórico aparece como integração “agendamento”.
 - A função tem até 300 s (`vercel.json` → `functions`), suficiente para ler as abas e recalcular.
-- O segredo do cliente no Entra ID expira: ao renovar, troque `MS_GRAPH_CLIENT_SECRET` na Vercel e
-  faça **Redeploy**.
+- **Sem segredo (federação de identidade):** na Vercel a API entra na Microsoft com o token OIDC
+  do próprio deploy (`x-vercel-oidc-token` → `client_assertion`). Configuração única:
+  1. Vercel → Settings → Security → **OIDC Federation**: ligado, issuer mode **Team**.
+  2. Entra ID → aplicativo → Certificados e segredos → **Credenciais federadas** → Adicionar →
+     cenário **Outro emissor**:
+     - Emissor: `https://oidc.vercel.com/tx-c`
+     - Identificador do assunto: `owner:tx-c:project:painel-obras-unita:environment:production`
+     - Público: `https://vercel.com/tx-c`
+  3. Testar “Simular”. Funcionando, apagar `MS_GRAPH_CLIENT_SECRET` da Vercel e o segredo no Entra
+     (enquanto existir, ele é usado só se a federação falhar).
+- Permissões: preferir `Sites.Selected` com leitura liberada só no site da planilha, em vez de
+  `Sites.Read.All`.
+- Renomear a equipe ou o projeto na Vercel muda o identificador do assunto: atualize a credencial
+  federada.
 
 ## 4. Usuários (Supabase → Authentication)
 
