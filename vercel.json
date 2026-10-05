@@ -7,6 +7,17 @@
   "regions": [
     "gru1"
   ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/v1/integrations/work-curves/cron",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

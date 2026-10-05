@@ -75,6 +75,18 @@ anterior são substituídos automaticamente pela cópia.
 O build da Vercel (`npm run build:vercel`) já aplica as migrations e a carga idempotente usando
 `DATABASE_MIGRATION_URL`. Depois do deploy, o site passa a ler e gravar no Supabase.
 
+### SharePoint (Microsoft Graph) na Vercel
+
+- Variáveis: `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET`, `MS_GRAPH_DRIVE_ID`,
+  `MS_GRAPH_ITEM_ID` (as demais têm padrão) — as mesmas do `integracao-microsoft.txt`.
+- Importação manual: **Curvas das obras → Simular / Importar curvas e IEC** (EDITOR ou ADMIN).
+- Importação automática: Vercel Cron todo dia às 06:00 (09:00 UTC) chama
+  `GET /api/v1/integrations/work-curves/cron` com `Authorization: Bearer CRON_SECRET`
+  (variável `CRON_SECRET` na Vercel). No histórico aparece como integração “agendamento”.
+- A função tem até 300 s (`vercel.json` → `functions`), suficiente para ler as abas e recalcular.
+- O segredo do cliente no Entra ID expira: ao renovar, troque `MS_GRAPH_CLIENT_SECRET` na Vercel e
+  faça **Redeploy**.
+
 ## 4. Usuários (Supabase → Authentication)
 
 O cadastro pela tela inicial do app fica desligado (`AUTH_PROVIDER=supabase`). O Supabase guarda e

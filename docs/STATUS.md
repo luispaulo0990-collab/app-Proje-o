@@ -96,6 +96,12 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 - Testes: API 90 · web 7. Guia: `docs/SUPABASE.md` §4.
 - **Pendente do usuário:** variáveis na Vercel; URL Configuration (Site URL + Redirect `/redefinir-senha`) no Supabase; criar os usuários em Authentication com os mesmos e-mails da demonstração.
 
+## Concluído (05/10/2026 — Deploy Vercel e Graph em produção)
+
+- Deploy na Vercel (`painel-obras-unita`, região `gru1`). Correção: `content-disposition` fixado em 1.x (`overrides`) e `@fastify/static` carregado só no modo demonstração — o runtime da Vercel não faz `require()` de ESM (`ERR_REQUIRE_ESM`).
+- Banco da demonstração recuperado (WAL corrompido → `pg_resetwal` numa cópia) e exportado em `.demo-data/recuperado.tar.gz`; `db:copy` usa esse arquivo quando existe (`pglite:dump=`).
+- Microsoft Graph na Vercel: variáveis `MS_GRAPH_*` + `CRON_SECRET`; importação diária automática (Vercel Cron 09:00 UTC → `GET /integrations/work-curves/cron`); `maxDuration` 300 s. Testes: API 92.
+
 ## Próximos passos
 
 1. **Fase 6** — grade editável estilo Excel (TanStack Table + virtualização): edição de célula, Enter/Tab/setas, copiar/colar, seleção múltipla, marcação manual, salvar em lote (PUT /projections/:workId já existe); visão de carteira já existe (Consolidado, somente leitura); falta virtualizar para centenas de obras.

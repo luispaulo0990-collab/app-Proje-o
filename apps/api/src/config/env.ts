@@ -59,6 +59,8 @@ const envSchema = z
      * `nome:chave,nome2:chave2` — each key with at least 32 characters. Sent as `X-Api-Key`.
      */
     INTEGRATION_API_KEYS: z.string().optional(),
+    /** Vercel Cron: secret sent as `Authorization: Bearer …` to the scheduled import. */
+    CRON_SECRET: z.string().min(16, 'CRON_SECRET deve ter pelo menos 16 caracteres.').optional(),
     /**
      * Microsoft Graph (app-only) — reads the own curves of started works from the
      * "Consolidado Físico - Obras.xlsx" workbook on SharePoint. All three credentials are

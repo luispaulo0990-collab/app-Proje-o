@@ -15,8 +15,13 @@ import type {
   EconomicIndicatorProvider,
   WorkCurveProvider,
 } from '../../integrations/work-curve-provider.js';
-import { currentActor, requireRole, requireRoleOrApiKey } from '../../middleware/auth.js';
-import { AppError } from '../../utils/errors.js';
+import {
+  currentActor,
+  matchIntegrationKey,
+  requireRole,
+  requireRoleOrApiKey,
+} from '../../middleware/auth.js';
+import { AppError, unauthorized } from '../../utils/errors.js';
 import { createCurveSyncService } from './curve-sync.service.js';
 
 export interface IntegrationsRoutesOptions {
@@ -96,6 +101,41 @@ export const integrationsRoutes: FastifyPluginAsyncZod<IntegrationsRoutesOptions
           throw new AppError(502, 'INTEGRATION_UNAVAILABLE', err.message);
         throw err;
       }
+    },
+  );
+
+  /**
+   * Scheduled import (Vercel Cron → GET with `Authorization: Bearer CRON_SECRET`): same as
+   * "Importar curvas e IEC", recorded in the audit as integration "agendamento".
+   */
+  app.get(
+    '/work-curves/cron',
+    {
+      schema: {
+        tags: ['integrations'],
+        summary: 'Importação agendada (Vercel Cron) — exige CRON_SECRET',
+        response: { 200: curveSyncReportDto, 401: errorResponse, 422: errorResponse },
+      },
+    },
+    async (req) => {
+      const secret = app.deps.env.CRON_SECRET;
+      const header = req.headers.authorization ?? '';
+      const presented = header.startsWith('Bearer ') ? header.slice(7) : '';
+      if (!secret || !presented || !matchIntegrationKey([{ name: 'cron', key: secret }], presented))
+        throw unauthorized('Agendamento não autorizado.');
+      if (!provider)
+        throw new AppError(
+          422,
+          'INTEGRATION_NOT_CONFIGURED',
+          'Integração com o Microsoft Graph não configurada (variáveis MS_GRAPH_*).',
+        );
+      const report = await service.sync(
+        provider,
+        { user: null, integration: 'agendamento' },
+        { dryRun: false, economicProvider },
+      );
+      req.log.info({ totals: report.totals }, 'importação agendada concluída');
+      return report;
     },
   );
 };
