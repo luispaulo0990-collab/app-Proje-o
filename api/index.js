@@ -13,7 +13,11 @@ let appPromise;
 function getApp() {
   appPromise ??= (async () => {
     const env = loadEnv();
-    const db = createDatabase(env.DATABASE_URL, env.DATABASE_POOL_MAX);
+    const db = createDatabase(env.DATABASE_URL, {
+      max: env.DATABASE_POOL_MAX,
+      ssl: env.DATABASE_SSL,
+      sslCa: env.DATABASE_SSL_CA,
+    });
     const app = await buildApp({ env, db });
     await app.ready();
     return app;

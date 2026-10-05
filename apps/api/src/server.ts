@@ -4,7 +4,11 @@ import { createDatabase } from './database/client.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  const db = createDatabase(env.DATABASE_URL, env.DATABASE_POOL_MAX);
+  const db = createDatabase(env.DATABASE_URL, {
+    max: env.DATABASE_POOL_MAX,
+    ssl: env.DATABASE_SSL,
+    sslCa: env.DATABASE_SSL_CA,
+  });
   const app = await buildApp({ env, db });
 
   const shutdown = async (signal: string) => {

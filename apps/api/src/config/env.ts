@@ -16,7 +16,19 @@ const envSchema = z
         (v) => /^postgres(ql)?:\/\//.test(v) || v.startsWith('pglite:'),
         'Use postgres://… (servidor) ou pglite:<pasta> (banco embarcado de demonstração).',
       ),
+    /**
+     * Schema changes, seed and bulk copy. On Supabase: the session pooler (port 5432); the app
+     * itself (DATABASE_URL) uses the transaction pooler (port 6543) on serverless hosts.
+     */
+    DATABASE_MIGRATION_URL: z
+      .string()
+      .refine((v) => v === '' || /^postgres(ql)?:\/\//.test(v), 'Use postgres://…')
+      .optional(),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+    /** TLS: auto | disable | require | verify-full (see database/ssl.ts). */
+    DATABASE_SSL: z.enum(['auto', 'disable', 'require', 'verify-full']).default('auto'),
+    /** CA certificate for verify-full (Supabase: prod-ca-2021.crt) — PEM, base64 or file path. */
+    DATABASE_SSL_CA: z.string().optional(),
     AUTH_SECRET: z.string().min(32, 'AUTH_SECRET deve ter pelo menos 32 caracteres.'),
     ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(15),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),

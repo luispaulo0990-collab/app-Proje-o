@@ -4,6 +4,7 @@ import { drizzle as drizzleNodePg } from 'drizzle-orm/node-postgres';
 import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import pg from 'pg';
+import { resolveSsl, type DatabaseSslMode } from './ssl.js';
 import * as schema from './schema/index.js';
 
 export type Schema = typeof schema;
@@ -14,7 +15,7 @@ export type Database = Db & { close: () => Promise<void>; driver: 'postgres' | '
 
 /**
  * `DATABASE_URL` selects the driver:
- * - `postgres://…`   → PostgreSQL server (development and production)
+ * - `postgres://…`   → PostgreSQL server (Supabase, VPS, local) — development and production
  * - `pglite:<pasta>` → PostgreSQL embarcado (PGlite/WASM) gravado em disco — modo demonstração
  * - `pglite:memory`  → PostgreSQL embarcado em memória
  */
@@ -22,6 +23,15 @@ export const EMBEDDED_PREFIX = 'pglite:';
 
 export function isEmbeddedUrl(url: string): boolean {
   return url.startsWith(EMBEDDED_PREFIX);
+}
+
+export interface DatabaseOptions {
+  /** Maximum pool size (server driver only). */
+  max?: number;
+  /** TLS mode; defaults to `DATABASE_SSL`, then `auto` (see ssl.ts). */
+  ssl?: DatabaseSslMode;
+  /** CA certificate (PEM, base64 PEM or file path); defaults to `DATABASE_SSL_CA`. */
+  sslCa?: string;
 }
 
 // NUMERIC (1700) and DATE (1082) stay as strings: no float conversion, no timezone shift.
@@ -37,11 +47,26 @@ function createEmbedded(url: string): Database {
   return Object.assign(db, { close: () => client.close(), driver: 'pglite' as const });
 }
 
-export function createDatabase(url: string, max = 10): Database {
+export function createDatabase(url: string, maxOrOptions: number | DatabaseOptions = 10): Database {
   if (isEmbeddedUrl(url)) return createEmbedded(url);
-  const pool = new pg.Pool({ connectionString: url, max });
+  const options = typeof maxOrOptions === 'number' ? { max: maxOrOptions } : maxOrOptions;
+  const { connectionString, ssl } = resolveSsl(url, {
+    mode: options.ssl ?? (process.env.DATABASE_SSL as DatabaseSslMode | undefined),
+    ca: options.sslCa ?? process.env.DATABASE_SSL_CA,
+  });
+  const pool = new pg.Pool({ connectionString, ssl, max: options.max ?? 10 });
+  // An idle client dropped by the pooler/network must not crash the process.
+  pool.on('error', (err) => console.error('[database] conexão ociosa encerrada:', err.message));
   const db = drizzleNodePg(pool, { schema }) as unknown as Db;
   return Object.assign(db, { close: () => pool.end(), driver: 'postgres' as const });
+}
+
+/**
+ * URL for schema changes and bulk loads. On Supabase the app runs through the transaction
+ * pooler (port 6543); migrations prefer the session pooler/direct URL when configured.
+ */
+export function migrationUrl(source: NodeJS.ProcessEnv = process.env): string | undefined {
+  return source.DATABASE_MIGRATION_URL || source.DATABASE_URL;
 }
 
 export { schema };

@@ -108,7 +108,9 @@ Veja [`.env.example`](.env.example). As principais:
 
 | Variável                        | Descrição                                         |
 | ------------------------------- | ------------------------------------------------- |
-| `DATABASE_URL`                  | conexão PostgreSQL                                |
+| `DATABASE_URL`                  | conexão PostgreSQL (Supabase: pooler 6543)        |
+| `DATABASE_MIGRATION_URL`        | migrations/cópia (Supabase: pooler 5432)          |
+| `DATABASE_SSL` / `_SSL_CA`      | TLS do banco (`auto`; CA do Supabase = verificado) |
 | `AUTH_SECRET`                   | segredo do JWT (≥ 32 caracteres)                  |
 | `CORS_ORIGIN`                   | origens permitidas (lista; nunca `*` em produção) |
 | `APP_URL`                       | URL do front (links de redefinição de senha)      |
@@ -120,6 +122,8 @@ Veja [`.env.example`](.env.example). As principais:
 | `MS_GRAPH_*`                    | leitura das curvas no SharePoint (ver abaixo)     |
 
 ## Banco e migrations
+
+- Produção: **PostgreSQL do Supabase** — passo a passo em [`docs/SUPABASE.md`](docs/SUPABASE.md). Para levar os dados da demonstração (`.demo-data`) para lá: `copiar-para-supabase.bat` (ou `npm run db:copy`), com cópia conferida tabela a tabela.
 
 - Schema em `apps/api/src/database/schema/index.ts` (Drizzle).
 - Após alterar o schema: `npm run db:generate` (gera SQL em `apps/api/drizzle/`) → revisar → `npm run db:migrate`.

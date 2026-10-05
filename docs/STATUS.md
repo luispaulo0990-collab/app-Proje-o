@@ -1,6 +1,6 @@
 # Status do projeto — Painel de Obras Unità
 
-Atualizado em 02/10/2026.
+Atualizado em 05/10/2026.
 
 ## Onde está o código
 
@@ -77,6 +77,15 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 - API: `GET/PUT/DELETE /incc-indices[/:mes]` (`{ index }`) e `PUT /incc-indices` em lote; o DTO traz `index` e a `rate` calculada. Auditoria `INCC_SET`, `INCC_IMPORT`, `INCC_REMOVED`.
 - Web: painel “INCC mensal (número-índice)” — campo “INCC do mês (índice)”, lista com índice e variação calculada, mensagem com a variação após salvar.
 - Testes: engine 103 · API 73 · web 4.
+
+## Concluído (05/10/2026 — Dados no Supabase)
+
+- Pedido do usuário: salvar as informações no servidor Supabase; aplicação na **Vercel**; **copiar** os dados já lançados na demonstração.
+- Conexão: `DATABASE_URL` = transaction pooler (6543, Vercel), `DATABASE_MIGRATION_URL` = session pooler (5432, migrations/seed/cópia). TLS em `database/ssl.ts`: `DATABASE_SSL=auto|disable|require|verify-full` + `DATABASE_SSL_CA` (PEM, base64 ou arquivo); `sslmode` da URL é tratado e removido para não conflitar com o `pg`.
+- Segurança: `hardenForSupabase` roda após toda migration — RLS sem políticas em todas as tabelas de `public` e revogação de `anon`/`authenticated` (inclusive privilégios padrão). Sem efeito em Postgres comum/PGlite.
+- Cópia: `npm run db:copy` / `copiar-para-supabase.bat` — origem `.demo-data/db`, destino `DATABASE_MIGRATION_URL`; ordem por FKs, transação única, sequências ajustadas, conferência SHA-256 por tabela; recusa sobrescrever destino com usuários sem `--substituir`.
+- Guia: `docs/SUPABASE.md`. Testes: API 81 (8 novos; suíte inteira rodando com RLS ligado).
+- **Pendente do usuário:** preencher `.env` com as conexões do Supabase, rodar a cópia e configurar as variáveis na Vercel.
 
 ## Próximos passos
 

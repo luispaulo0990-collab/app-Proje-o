@@ -5,13 +5,15 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
 import { upgradeProjectionsToCurrentFeeRules } from '../modules/projections/fee-rules-upgrade.js';
-import { createDatabase, type Database, type Schema } from './client.js';
+import { createDatabase, migrationUrl, type Database, type Schema } from './client.js';
+import { hardenForSupabase } from './supabase-hardening.js';
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
 
 /**
  * Applies versioned SQL migrations (apps/api/drizzle) on an open database handle, then the
- * idempotent data upgrades that need the engine (projections under outdated rules).
+ * Supabase hardening (Data API closed) and the idempotent data upgrades that need the engine
+ * (projections under outdated rules).
  */
 export async function migrateDatabase(db: Database): Promise<void> {
   if (db.driver === 'pglite') {
@@ -19,6 +21,7 @@ export async function migrateDatabase(db: Database): Promise<void> {
   } else {
     await migrateNodePg(db as unknown as NodePgDatabase<Schema>, { migrationsFolder });
   }
+  await hardenForSupabase(db);
   await upgradeProjectionsToCurrentFeeRules(db);
 }
 
@@ -34,9 +37,9 @@ export async function runMigrations(databaseUrl: string): Promise<void> {
 
 const isEntrypoint = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isEntrypoint) {
-  const url = process.env.DATABASE_URL;
+  const url = migrationUrl();
   if (!url) {
-    console.error('DATABASE_URL não definida.');
+    console.error('DATABASE_URL (ou DATABASE_MIGRATION_URL) não definida.');
     process.exit(1);
   }
   runMigrations(url)

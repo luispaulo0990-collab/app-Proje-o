@@ -26,6 +26,7 @@
     "db:generate": "npm run db:generate --workspace=@unita/api",
     "db:migrate": "npm run db:migrate --workspace=@unita/api",
     "db:seed": "npm run db:seed --workspace=@unita/api",
+    "db:copy": "npm run db:copy --workspace=@unita/api --",
     "demo": "npm run build --workspace=@unita/web && npm run demo --workspace=@unita/api"
   },
   "devDependencies": {

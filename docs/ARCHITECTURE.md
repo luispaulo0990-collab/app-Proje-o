@@ -82,6 +82,7 @@ O engine é consumível futuramente por Power BI/Excel/automação via API, sem 
 | 013 | **Curva própria da obra** versionada (`work_actual_curves`), recebida por endpoint genérico; regra de vigência no engine (`resolveEffectiveCurve`)                                                                | Sistema de origem ainda indefinido → contrato estável; adaptador específico entra na Integration Layer depois           |
 | 014 | Integrações autenticam por **`X-Api-Key`** (`INTEGRATION_API_KEYS`, comparação em tempo constante), só nas rotas de curva própria/sync                                                                            | Sistemas máquina-a-máquina sem sessão; auditoria registra `metadata.integration`                                        |
 | 016 | Integração **Microsoft Graph app-only** (client credentials, sem SDK) lendo `usedRange` da aba BD_Infos Gerais; porta `WorkCurveProvider` + adaptador `GraphWorkCurveProvider`; casamento por nome padrão da obra | Credenciais só no servidor; trocar a fonte (ERP, outra planilha) = novo adaptador, sem tocar no domínio                 |
+| 017 | **Banco no Supabase** (PostgreSQL gerenciado) acessado só pela API; app na Vercel pelo *transaction pooler* (6543), migrations/cópia pelo *session pooler* (`DATABASE_MIGRATION_URL`, 5432); TLS por `DATABASE_SSL`/`DATABASE_SSL_CA` (verify-full com o CA do Supabase); após cada migration `hardenForSupabase` liga RLS sem políticas e revoga `anon`/`authenticated` | Pedido do usuário (05/10/2026). Mesmo Drizzle/`pg`, sem SDK do Supabase → domínio e engine intocados e portáveis; a Data API do Supabase não expõe nenhuma tabela |
 | 015 | Consolidado e “Curvas das obras” carregam a carteira com nº fixo de consultas (sem N+1) e calculam tudo no engine                                                                                                 | SSOT: a web só exibe; mesma fonte para futuros Power BI/Excel                                                           |
 
 ## 3. Modelo de dados
@@ -192,7 +193,7 @@ Regras matemáticas (detalhadas em `docs/CALCULATION_RULES.md`):
 | A4  | Edição manual de % físico afeta a taxa?                                | Sim: taxa deriva do físico final, exceto células de taxa manuais.                                               |
 | A5  | Quem pode se cadastrar                                                 | 1º usuário = ADMIN; demais entram como VIEWER e o ADMIN promove.                                                |
 | A6  | Envio de e-mail (recuperar senha)                                      | Interface `Mailer` com adaptador de console em dev; SMTP (Hostinger Mail) em produção.                          |
-| A7  | Fase 10 da especificação cita Vercel/Supabase, seção 32 cita Hostinger | Seguimos **Hostinger VPS** (confirmado). Código permanece portável.                                             |
+| A7  | Fase 10 da especificação cita Vercel/Supabase, seção 32 cita Hostinger | Atualizado em 05/10/2026: **Vercel + Supabase** (pedido do usuário). Guia Hostinger mantido; código portável.   |
 | A8  | Colunas gerenciais da planilha (IEC, INCC, áreas, equipe)              | Fora das fases 1–5; entram como atributos da obra numa fase posterior.                                          |
 
 ## 7. Plano de implementação

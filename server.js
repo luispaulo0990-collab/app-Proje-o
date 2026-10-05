@@ -16,9 +16,10 @@ process.env.SERVE_WEB_DIR ??= fileURLToPath(new URL('./apps/web/dist', import.me
 
 async function prepareDatabase() {
   if (process.env.DB_MIGRATE_ON_START === 'false') return;
-  const { DATABASE_URL } = loadEnv();
-  await runMigrations(DATABASE_URL);
-  const db = createDatabase(DATABASE_URL, 1);
+  const env = loadEnv();
+  const url = env.DATABASE_MIGRATION_URL || env.DATABASE_URL;
+  await runMigrations(url);
+  const db = createDatabase(url, 1);
   try {
     await seedDatabase(db, {
       adminEmail: process.env.SEED_ADMIN_EMAIL,

@@ -20,7 +20,11 @@ async function main(): Promise<void> {
   const env = loadEnv();
   const provider = graphProviderFromEnv(env);
   if (!provider) throw new Error('Configure as variáveis MS_GRAPH_* antes de sincronizar.');
-  const db = createDatabase(env.DATABASE_URL, 2);
+  const db = createDatabase(env.DATABASE_URL, {
+    max: 2,
+    ssl: env.DATABASE_SSL,
+    sslCa: env.DATABASE_SSL_CA,
+  });
   const log = { info: console.warn, warn: console.warn, error: console.error };
   try {
     const service = createCurveSyncService({
