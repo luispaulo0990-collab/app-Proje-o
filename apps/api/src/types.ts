@@ -2,6 +2,7 @@ import type { Role } from '@unita/contracts';
 import type { Env } from './config/env.js';
 import type { Database } from './database/client.js';
 import type { JwtService } from './modules/auth/jwt.js';
+import type { SupabaseAuthClient } from './modules/auth/supabase-auth.js';
 import type { Mailer } from './services/mailer.js';
 
 export interface AuthUser {
@@ -24,6 +25,8 @@ export interface AppDeps {
   db: Database;
   jwt: JwtService;
   mailer: Mailer;
+  /** Present when AUTH_PROVIDER=supabase: Supabase Auth checks the passwords. */
+  supabaseAuth: SupabaseAuthClient | null;
 }
 
 declare module 'fastify' {

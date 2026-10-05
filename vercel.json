@@ -4,8 +4,17 @@
   "installCommand": "npm ci --include=dev",
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "apps/web/dist",
+  "regions": [
+    "gru1"
+  ],
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

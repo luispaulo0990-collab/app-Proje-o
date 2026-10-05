@@ -46,13 +46,19 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     name: varchar('name', { length: 120 }).notNull(),
     email: varchar('email', { length: 254 }).notNull(),
-    passwordHash: text('password_hash').notNull(),
+    /** Null for users managed by Supabase Auth (AUTH_PROVIDER=supabase). */
+    passwordHash: text('password_hash'),
+    /** `auth.users.id` on Supabase — links the login identity to this profile/role. */
+    authUserId: uuid('auth_user_id'),
     role: roleEnum('role').notNull().default('VIEWER'),
     isActive: boolean('is_active').notNull().default(true),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [uniqueIndex('users_email_uq').on(sql`lower(${t.email})`)],
+  (t) => [
+    uniqueIndex('users_email_uq').on(sql`lower(${t.email})`),
+    uniqueIndex('users_auth_user_id_uq').on(t.authUserId),
+  ],
 );
 
 export const refreshTokens = pgTable(

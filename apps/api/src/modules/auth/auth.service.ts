@@ -10,6 +10,7 @@ import { auditRepository } from '../../database/repositories/audit.repository.js
 import { tokensRepository } from '../../database/repositories/tokens.repository.js';
 import { usersRepository, type UserRow } from '../../database/repositories/users.repository.js';
 import type { AppDeps } from '../../types.js';
+import type { SupabaseIdentity } from './supabase-auth.js';
 import { AppError, conflict, forbidden, unauthorized } from '../../utils/errors.js';
 import {
   generateOpaqueToken,
@@ -38,7 +39,10 @@ export function toUserDto(u: UserRow): UserDto {
 
 const INVALID_CREDENTIALS = 'E-mail ou senha inválidos.';
 
-export function createAuthService({ db, env, jwt, mailer }: AppDeps) {
+export const SUPABASE_MANAGED =
+  'Os usuários são criados pelo administrador no Supabase (Authentication → Users).';
+
+export function createAuthService({ db, env, jwt, mailer, supabaseAuth }: AppDeps) {
   const refreshTtlMs = env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
 
   async function openSession(user: UserRow, userAgent?: string): Promise<SessionResult> {
@@ -58,8 +62,46 @@ export function createAuthService({ db, env, jwt, mailer }: AppDeps) {
     };
   }
 
+  /**
+   * Profile/role of a Supabase identity: linked by auth id, then by e-mail (users that existed
+   * before Supabase Auth); created as VIEWER when missing (the database trigger normally does it).
+   */
+  async function profileFor(identity: SupabaseIdentity): Promise<UserRow> {
+    const linked = await usersRepository.findByAuthUserId(db, identity.id);
+    if (linked) return linked;
+    const byEmail = await usersRepository.findByEmail(db, identity.email);
+    if (byEmail) {
+      const row = await usersRepository.update(db, byEmail.id, { authUserId: identity.id });
+      return row ?? byEmail;
+    }
+    const user = await usersRepository.create(db, {
+      name: identity.name ?? identity.email.split('@')[0] ?? identity.email,
+      email: identity.email,
+      passwordHash: null,
+      role: 'VIEWER',
+      authUserId: identity.id,
+    });
+    await auditRepository.insert(db, {
+      userId: user.id,
+      action: 'REGISTER',
+      entity: 'user',
+      entityId: user.id,
+      newValue: 'VIEWER',
+      origin: 'SUPABASE_AUTH',
+    });
+    return user;
+  }
+
   return {
+    /** Who checks passwords; the web hides "Criar conta" when registration is closed. */
+    async config(): Promise<{ provider: 'local' | 'supabase'; registrationEnabled: boolean }> {
+      if (supabaseAuth) return { provider: 'supabase', registrationEnabled: false };
+      const open = env.ALLOW_PUBLIC_REGISTRATION || (await usersRepository.count(db)) === 0;
+      return { provider: 'local', registrationEnabled: open };
+    },
+
     async register(input: RegisterBody, userAgent?: string): Promise<SessionResult> {
+      if (supabaseAuth) throw forbidden(SUPABASE_MANAGED);
       const total = await usersRepository.count(db);
       if (total > 0 && !env.ALLOW_PUBLIC_REGISTRATION) {
         throw forbidden('O cadastro público está desativado. Solicite acesso a um administrador.');
@@ -85,12 +127,20 @@ export function createAuthService({ db, env, jwt, mailer }: AppDeps) {
     },
 
     async login(input: LoginBody, userAgent?: string): Promise<SessionResult> {
+      if (supabaseAuth) {
+        const identity = await supabaseAuth.signInWithPassword(input.email, input.password);
+        if (!identity) throw unauthorized(INVALID_CREDENTIALS);
+        const profile = await profileFor(identity);
+        if (!profile.isActive) throw forbidden('Usuário desativado.');
+        await usersRepository.update(db, profile.id, { lastLoginAt: new Date() });
+        return openSession(profile, userAgent);
+      }
       const user = await usersRepository.findByEmail(db, input.email);
       if (!user) {
         await verifyPassword(await getDummyHash(), input.password); // timing equalisation
         throw unauthorized(INVALID_CREDENTIALS);
       }
-      if (!(await verifyPassword(user.passwordHash, input.password)))
+      if (!user.passwordHash || !(await verifyPassword(user.passwordHash, input.password)))
         throw unauthorized(INVALID_CREDENTIALS);
       if (!user.isActive) throw forbidden('Usuário desativado.');
       await usersRepository.update(db, user.id, { lastLoginAt: new Date() });
@@ -137,6 +187,11 @@ export function createAuthService({ db, env, jwt, mailer }: AppDeps) {
 
     /** Always resolves (never reveals whether the e-mail exists). */
     async forgotPassword(input: ForgotPasswordBody): Promise<void> {
+      if (supabaseAuth) {
+        const redirect = new URL('/redefinir-senha', env.APP_URL).toString();
+        await supabaseAuth.sendPasswordRecovery(input.email, redirect);
+        return;
+      }
       const user = await usersRepository.findByEmail(db, input.email);
       if (!user?.isActive) return;
       const { token, tokenHash } = generateOpaqueToken(32);
@@ -148,6 +203,22 @@ export function createAuthService({ db, env, jwt, mailer }: AppDeps) {
     },
 
     async resetPassword(input: ResetPasswordBody): Promise<void> {
+      if (supabaseAuth) {
+        // input.token = access token from the Supabase recovery/invite link.
+        const identity = await supabaseAuth.updatePassword(input.token, input.password);
+        const profile = await profileFor(identity);
+        await db.transaction(async (tx) => {
+          await tokensRepository.revokeAllForUser(tx, profile.id);
+          await auditRepository.insert(tx, {
+            userId: profile.id,
+            action: 'PASSWORD_RESET',
+            entity: 'user',
+            entityId: profile.id,
+            origin: 'SUPABASE_AUTH',
+          });
+        });
+        return;
+      }
       const stored = await tokensRepository.findPasswordReset(db, sha256(input.token));
       if (!stored || stored.usedAt || stored.expiresAt.getTime() <= Date.now()) {
         throw new AppError(400, 'INVALID_TOKEN', 'Link de redefinição inválido ou expirado.');

@@ -40,6 +40,15 @@ const envSchema = z
     COOKIE_SECURE: bool.optional(),
     TRUST_PROXY: bool.default(false),
     ALLOW_PUBLIC_REGISTRATION: bool.default(true),
+    /**
+     * Who checks passwords: `local` (Argon2 in our users table — demo/VPS) or `supabase`
+     * (users created in Supabase → Authentication; our users table keeps profile and role).
+     */
+    AUTH_PROVIDER: z.enum(['local', 'supabase']).default('local'),
+    /** Project URL, e.g. https://xxxx.supabase.co (AUTH_PROVIDER=supabase). */
+    SUPABASE_URL: z.string().trim().url().optional(),
+    /** Publishable (public) key — sb_publishable_… or the legacy anon key. Never the secret key. */
+    SUPABASE_PUBLISHABLE_KEY: z.string().trim().optional(),
     /** Serves the built web app (apps/web/dist) from the API — single-process demo mode. */
     SERVE_WEB_DIR: z.string().optional(),
     RATE_LIMIT_MAX: z.coerce.number().int().default(300),
@@ -87,6 +96,24 @@ const envSchema = z
         path: ['CORS_ORIGIN'],
         message: 'CORS_ORIGIN="*" não é permitido em produção.',
       });
+    }
+    if (env.AUTH_PROVIDER === 'supabase') {
+      for (const key of ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} é obrigatória com AUTH_PROVIDER=supabase.`,
+          });
+        }
+      }
+      if (env.SUPABASE_PUBLISHABLE_KEY?.startsWith('sb_secret_')) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['SUPABASE_PUBLISHABLE_KEY'],
+          message: 'Use a chave publishable (sb_publishable_…), nunca a secret key.',
+        });
+      }
     }
     for (const entry of splitList(env.INTEGRATION_API_KEYS)) {
       const [name, key] = splitKey(entry);
@@ -137,7 +164,14 @@ export interface IntegrationKey {
   key: string;
 }
 
+export interface SupabaseAuthConfig {
+  url: string;
+  publishableKey: string;
+}
+
 export type Env = z.infer<typeof envSchema> & {
+  /** Set when AUTH_PROVIDER=supabase. */
+  supabaseAuth: SupabaseAuthConfig | null;
   COOKIE_SECURE: boolean;
   corsOrigins: string[];
   integrationKeys: IntegrationKey[];
@@ -157,6 +191,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   return {
     ...env,
     COOKIE_SECURE: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
+    supabaseAuth:
+      env.AUTH_PROVIDER === 'supabase' && env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY
+        ? {
+            url: env.SUPABASE_URL.replace(/\/+$/, ''),
+            publishableKey: env.SUPABASE_PUBLISHABLE_KEY,
+          }
+        : null,
     corsOrigins: env.CORS_ORIGIN.split(',')
       .map((o) => o.trim())
       .filter(Boolean),

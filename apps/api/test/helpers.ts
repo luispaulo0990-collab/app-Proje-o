@@ -13,7 +13,10 @@ export interface TestContext {
 
 export async function createTestApp(
   overrides: Record<string, string> = {},
-  options: Pick<Parameters<typeof buildApp>[0], 'workCurveProvider' | 'economicProvider'> = {},
+  options: Pick<
+    Parameters<typeof buildApp>[0],
+    'workCurveProvider' | 'economicProvider' | 'supabaseAuth'
+  > = {},
 ): Promise<TestContext> {
   const env = loadEnv({
     NODE_ENV: 'test',

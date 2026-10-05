@@ -43,6 +43,13 @@
       "when": 1790970061750,
       "tag": "0005_incc_indices",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791212256928,
+      "tag": "0006_supabase_auth",
+      "breakpoints": true
     }
   ]
 }

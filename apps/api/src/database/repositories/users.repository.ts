@@ -14,6 +14,11 @@ export const usersRepository = {
     return row;
   },
 
+  async findByAuthUserId(db: Db, authUserId: string): Promise<UserRow | undefined> {
+    const [row] = await db.select().from(users).where(eq(users.authUserId, authUserId));
+    return row;
+  },
+
   async findById(db: Db, id: string): Promise<UserRow | undefined> {
     const [row] = await db.select().from(users).where(eq(users.id, id));
     return row;
@@ -26,7 +31,13 @@ export const usersRepository = {
 
   async create(
     db: Db,
-    data: { name: string; email: string; passwordHash: string; role: Role },
+    data: {
+      name: string;
+      email: string;
+      passwordHash: string | null;
+      role: Role;
+      authUserId?: string | null;
+    },
   ): Promise<UserRow> {
     const [row] = await db.insert(users).values(data).returning();
     if (!row) throw new Error('Falha ao criar usuário');
@@ -36,7 +47,9 @@ export const usersRepository = {
   async update(
     db: Db,
     id: string,
-    data: Partial<Pick<UserRow, 'role' | 'isActive' | 'passwordHash' | 'lastLoginAt'>>,
+    data: Partial<
+      Pick<UserRow, 'role' | 'isActive' | 'passwordHash' | 'lastLoginAt' | 'authUserId' | 'email'>
+    >,
   ) {
     const [row] = await db.update(users).set(data).where(eq(users.id, id)).returning();
     return row;

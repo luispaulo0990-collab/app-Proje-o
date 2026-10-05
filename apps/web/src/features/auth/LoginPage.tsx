@@ -7,9 +7,11 @@ import { Alert, Button, Field, Input } from '@/components/ui';
 import { errorMessage } from '@/services/api/client';
 import { AuthLayout } from './AuthLayout';
 import { useAuth } from './useAuth';
+import { useAuthConfig } from './useAuthConfig';
 
 export function LoginPage() {
   const { login } = useAuth();
+  const config = useAuthConfig();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +35,16 @@ export function LoginPage() {
       title="Entrar"
       subtitle="Painel de projeção físico-financeira de obras"
       footer={
-        <>
-          Ainda não tem acesso?{' '}
-          <Link to="/cadastro" className="font-medium text-primary hover:underline">
-            Criar conta
-          </Link>
-        </>
+        config.data?.registrationEnabled ? (
+          <>
+            Ainda não tem acesso?{' '}
+            <Link to="/cadastro" className="font-medium text-primary hover:underline">
+              Criar conta
+            </Link>
+          </>
+        ) : config.data ? (
+          <>Ainda não tem acesso? Solicite ao administrador do sistema.</>
+        ) : null
       }
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>

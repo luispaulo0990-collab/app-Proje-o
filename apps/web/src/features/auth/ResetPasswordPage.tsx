@@ -1,20 +1,22 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { resetPasswordBody, type ResetPasswordBody } from '@unita/contracts';
 import { Alert, Button, Field, Input } from '@/components/ui';
 import { errorMessage } from '@/services/api/client';
 import { authApi } from '@/services/api/endpoints';
 import { AuthLayout } from './AuthLayout';
+import { readRecoveryLink } from './recoveryToken';
 
 export function ResetPasswordPage() {
-  const [params] = useSearchParams();
+  const location = useLocation();
+  const [link] = useState(() => readRecoveryLink(location.search, location.hash));
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { register, handleSubmit, formState } = useForm<ResetPasswordBody>({
     resolver: zodResolver(resetPasswordBody),
-    defaultValues: { token: params.get('token') ?? '' },
+    defaultValues: { token: link.token },
   });
 
   const onSubmit = handleSubmit(async (data) => {
@@ -29,7 +31,7 @@ export function ResetPasswordPage() {
 
   return (
     <AuthLayout
-      title="Redefinir senha"
+      title={link.kind === 'invite' ? 'Defina sua senha' : 'Redefinir senha'}
       footer={
         <Link to="/login" className="text-primary hover:underline">
           Ir para o login
@@ -42,8 +44,8 @@ export function ResetPasswordPage() {
         </Alert>
       ) : (
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
-          {(error || formState.errors.token) && (
-            <Alert tone="error">{error ?? 'Link inválido ou incompleto.'}</Alert>
+          {(error || link.error || formState.errors.token) && (
+            <Alert tone="error">{error ?? link.error ?? 'Link inválido ou incompleto.'}</Alert>
           )}
           <input type="hidden" {...register('token')} />
           <Field

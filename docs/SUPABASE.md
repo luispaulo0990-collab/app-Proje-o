@@ -1,9 +1,9 @@
 # Banco de dados no Supabase (com Vercel)
 
-Os dados do Painel de Obras ficam no PostgreSQL do projeto Supabase da Unità. A aplicação continua
-acessando o banco **somente pela nossa API** (`/api/v1`): login, permissões, auditoria e o motor de
-cálculo não mudam. O Supabase é usado como servidor PostgreSQL gerenciado — não usamos o Supabase
-Auth nem a Data API (REST automática), que ficam fechadas para as nossas tabelas.
+Os dados do Painel de Obras ficam no PostgreSQL do projeto Supabase da Unità. A aplicação acessa o
+banco **somente pela nossa API** (`/api/v1`). Os usuários são criados no **Supabase →
+Authentication** (seção 4); o nível de acesso fica na tabela `users`. A Data API (REST automática)
+do Supabase fica fechada para as nossas tabelas.
 
 ## 1. Pegar as conexões no Supabase
 
@@ -64,6 +64,9 @@ anterior são substituídos automaticamente pela cópia.
 | `DATABASE_POOL_MAX`      | `3`                                            |
 | `DATABASE_SSL_CA`        | conteúdo do `prod-ca-2021.crt` (PEM ou base64) |
 | `AUTH_SECRET`            | o mesmo usado hoje (trocar desloga todo mundo) |
+| `AUTH_PROVIDER`          | `supabase`                                     |
+| `SUPABASE_URL`           | `https://fshyhsoyjcdtubpskfak.supabase.co`     |
+| `SUPABASE_PUBLISHABLE_KEY` | a chave `sb_publishable_…` (nunca a secret)  |
 | `NODE_ENV`               | `production`                                   |
 | `CORS_ORIGIN`/`APP_URL`  | `https://seu-dominio`                          |
 | `COOKIE_SECURE`          | `true`                                         |
@@ -72,7 +75,48 @@ anterior são substituídos automaticamente pela cópia.
 O build da Vercel (`npm run build:vercel`) já aplica as migrations e a carga idempotente usando
 `DATABASE_MIGRATION_URL`. Depois do deploy, o site passa a ler e gravar no Supabase.
 
-## 4. Segurança
+## 4. Usuários (Supabase → Authentication)
+
+O cadastro pela tela inicial do app fica desligado (`AUTH_PROVIDER=supabase`). O Supabase guarda e
+confere as senhas; a tabela `users` guarda nome, papel e se o usuário está ativo.
+
+**Criar um usuário**
+
+1. **Authentication → Users → Add user → Create new user**: e-mail e senha, marque **Auto Confirm
+   User**. (Ou **Send invitation**: a pessoa recebe um e-mail e define a senha na tela
+   `/redefinir-senha` do app.)
+2. Na mesma hora aparece uma linha em **Table Editor → users** com `role = VIEWER`.
+3. Troque `role` para o nível desejado e salve:
+
+| `role`   | Pode                                                             |
+| -------- | ---------------------------------------------------------------- |
+| `VIEWER` | só visualizar                                                    |
+| `EDITOR` | criar/editar obras, projeções, taxa emitida, INCC, integrações   |
+| `ADMIN`  | tudo, inclusive curvas paramétricas e usuários                   |
+
+- A mudança de papel vale em até 15 minutos (ou no próximo login).
+- Para bloquear alguém: `is_active = false` em `users` (ou exclua o usuário em Authentication, o
+  que também o desativa — o histórico de alterações dele é mantido).
+- Usuários copiados da demonstração são vinculados pelo **mesmo e-mail**: crie-os em Authentication
+  com o mesmo e-mail e eles mantêm o papel que já tinham.
+- Nome exibido: vem de `user_metadata.name` (ou `full_name`) se houver; senão, da parte do e-mail
+  antes do `@`. Pode ser corrigido em `users.name`.
+
+Como funciona: gatilhos em `auth.users` (instalados automaticamente a cada deploy) criam/vinculam o
+perfil em `users`, acompanham a troca de e-mail e desativam quem for excluído. Se o Supabase não
+permitir os gatilhos, o deploy só registra um aviso e o perfil é criado/vinculado no primeiro login.
+
+**Configurar os links de e-mail** (recuperação de senha e convite) em **Authentication → URL
+Configuration**:
+
+- **Site URL**: o endereço do app (ex.: `https://painel-obras.vercel.app`);
+- **Redirect URLs**: adicione `https://SEU-ENDERECO/redefinir-senha`.
+
+O Supabase envia esses e-mails pelo servidor dele, com limite baixo de envios por hora. Para uso
+diário, configure um SMTP próprio em **Authentication → Emails → SMTP Settings** (ex.: o e-mail da
+Hostinger).
+
+## 5. Segurança
 
 - Toda migration termina com um passo automático (`hardenForSupabase`): **RLS ligado em todas as
   tabelas, sem políticas**, e sem permissões para os papéis `anon`/`authenticated`. Assim a chave
@@ -85,7 +129,7 @@ O build da Vercel (`npm run build:vercel`) já aplica as migrations e a carga id
   a Data API.
 - Backups: o Supabase faz backup diário (Point-in-Time Recovery é opcional, plano pago).
 
-## 5. Voltar a usar o banco local
+## 6. Voltar a usar o banco local
 
 Apague `DATABASE_URL` do `.env`. A demonstração (`iniciar-demo.bat`) continua usando sempre o banco
 local `.demo-data`, independentemente do `.env`.

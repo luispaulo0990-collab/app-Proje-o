@@ -7,6 +7,7 @@ import { Alert, Button, Field, Input } from '@/components/ui';
 import { errorMessage } from '@/services/api/client';
 import { AuthLayout } from './AuthLayout';
 import { useAuth } from './useAuth';
+import { useAuthConfig } from './useAuthConfig';
 
 export function RegisterPage() {
   const { register: signUp } = useAuth();
@@ -16,6 +17,7 @@ export function RegisterPage() {
     resolver: zodResolver(registerBody),
   });
   const errors = formState.errors;
+  const config = useAuthConfig();
 
   const onSubmit = handleSubmit(async (data) => {
     setError(null);
@@ -26,6 +28,25 @@ export function RegisterPage() {
       setError(errorMessage(err));
     }
   });
+
+  if (config.data && !config.data.registrationEnabled) {
+    return (
+      <AuthLayout
+        title="Cadastro fechado"
+        footer={
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            Voltar ao login
+          </Link>
+        }
+      >
+        <Alert tone="info">
+          {config.data.provider === 'supabase'
+            ? 'Os acessos são criados pelo administrador. Solicite o seu e use o e-mail e a senha recebidos.'
+            : 'O cadastro público está desativado. Solicite acesso a um administrador.'}
+        </Alert>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

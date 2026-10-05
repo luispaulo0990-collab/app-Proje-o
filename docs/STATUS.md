@@ -87,6 +87,15 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 - Guia: `docs/SUPABASE.md`. Testes: API 81 (8 novos; suíte inteira rodando com RLS ligado).
 - **Pendente do usuário:** preencher `.env` com as conexões do Supabase, rodar a cópia e configurar as variáveis na Vercel.
 
+## Concluído (05/10/2026 — Usuários pelo Supabase Authentication)
+
+- Pedido do usuário: criar usuários em Supabase → Authentication (não pela tela inicial) e definir o nível na tabela `users`.
+- `AUTH_PROVIDER=supabase` (+ `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`): login, “esqueci a senha” e redefinição passam pelo Supabase Auth (REST, só a chave publishable, sem SDK); a API mantém a própria sessão (JWT 15 min + refresh em cookie) e os papéis. `/auth/register` responde 403; `GET /auth/config` informa o modo e a tela de login esconde “Criar conta”.
+- Banco: migration `0006_supabase_auth` (`users.password_hash` opcional, `users.auth_user_id` único). `syncSupabaseAuthUsers` (após cada migration e após a cópia) instala gatilhos em `auth.users`: novo usuário → perfil VIEWER (ou vincula pelo e-mail); troca de e-mail acompanha; exclusão → `is_active=false`. Sem permissão para gatilhos, vincula/cria no 1º login.
+- Web: `/redefinir-senha` aceita o link do Supabase (`#access_token…&type=recovery|invite`); convite vira “Defina sua senha”.
+- Testes: API 90 · web 7. Guia: `docs/SUPABASE.md` §4.
+- **Pendente do usuário:** variáveis na Vercel; URL Configuration (Site URL + Redirect `/redefinir-senha`) no Supabase; criar os usuários em Authentication com os mesmos e-mails da demonstração.
+
 ## Próximos passos
 
 1. **Fase 6** — grade editável estilo Excel (TanStack Table + virtualização): edição de célula, Enter/Tab/setas, copiar/colar, seleção múltipla, marcação manual, salvar em lote (PUT /projections/:workId já existe); visão de carteira já existe (Consolidado, somente leitura); falta virtualizar para centenas de obras.

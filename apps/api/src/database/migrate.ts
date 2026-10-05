@@ -6,6 +6,7 @@ import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
 import { upgradeProjectionsToCurrentFeeRules } from '../modules/projections/fee-rules-upgrade.js';
 import { createDatabase, migrationUrl, type Database, type Schema } from './client.js';
+import { syncSupabaseAuthUsers } from './supabase-auth-sync.js';
 import { hardenForSupabase } from './supabase-hardening.js';
 
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
@@ -22,6 +23,7 @@ export async function migrateDatabase(db: Database): Promise<void> {
     await migrateNodePg(db as unknown as NodePgDatabase<Schema>, { migrationsFolder });
   }
   await hardenForSupabase(db);
+  await syncSupabaseAuthUsers(db);
   await upgradeProjectionsToCurrentFeeRules(db);
 }
 

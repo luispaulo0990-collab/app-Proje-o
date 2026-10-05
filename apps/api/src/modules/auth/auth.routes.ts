@@ -2,6 +2,7 @@ import type { FastifyReply } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
+  authConfigDto,
   authResponse,
   errorResponse,
   forgotPasswordBody,
@@ -43,6 +44,18 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
 
   const tags = ['auth'];
   const errors = { 400: errorResponse, 401: errorResponse, 403: errorResponse, 409: errorResponse };
+
+  app.get(
+    '/config',
+    {
+      schema: {
+        tags,
+        summary: 'Modo de autenticação (local ou Supabase) e se o cadastro está aberto',
+        response: { 200: authConfigDto },
+      },
+    },
+    async () => service.config(),
+  );
 
   app.post(
     '/register',

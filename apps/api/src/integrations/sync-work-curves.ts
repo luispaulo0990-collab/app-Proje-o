@@ -32,6 +32,7 @@ async function main(): Promise<void> {
       db,
       jwt: new JwtService(env.AUTH_SECRET, 60),
       mailer: createMailer(env, log as never),
+      supabaseAuth: null,
     });
     const report = await service.sync(
       provider,

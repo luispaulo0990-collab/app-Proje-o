@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { createDatabase, EMBEDDED_PREFIX, isEmbeddedUrl, migrationUrl, type Db } from './client.js';
 import { migrateDatabase } from './migrate.js';
+import { syncSupabaseAuthUsers } from './supabase-auth-sync.js';
 import { queryRows } from './raw-query.js';
 
 const BATCH_ROWS = 2000;
@@ -133,7 +134,13 @@ export async function copyDatabase(
     throw new Error(`Tabelas ausentes no destino (migrations diferentes?): ${missing.join(', ')}`);
   }
 
-  const targetUsers = await countRows(target, 'users');
+  // Profiles auto-created from Supabase Auth (VIEWER, no local password) are not "real" data.
+  const [real] = await rows<{ n: number }>(
+    target,
+    sql`SELECT count(*)::int AS n FROM public.users
+         WHERE NOT (password_hash IS NULL AND auth_user_id IS NOT NULL AND role = 'VIEWER')`,
+  );
+  const targetUsers = Number(real?.n ?? 0);
   if (targetUsers > 0 && !options.replace) {
     throw new Error(
       `O destino já tem ${targetUsers} usuário(s) cadastrado(s). Para apagar os dados do destino e copiar mesmo assim, rode de novo com --substituir.`,
@@ -211,6 +218,8 @@ async function main(): Promise<void> {
     await migrateDatabase(target);
     console.warn('Copiando…');
     const report = await copyDatabase(source, target, { replace: args.includes('--substituir') });
+    // Re-link the copied profiles to the users already created in Supabase → Authentication.
+    await syncSupabaseAuthUsers(target);
     console.warn(
       `\nConcluído: ${report.totalRows} linhas em ${report.tables.length} tabelas, conferidas uma a uma.`,
     );

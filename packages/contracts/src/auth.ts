@@ -34,7 +34,8 @@ export type ForgotPasswordBody = z.infer<typeof forgotPasswordBody>;
 
 export const resetPasswordBody = z
   .object({
-    token: z.string().min(20).max(256),
+    // Our opaque reset token, or the Supabase access token from the recovery/invite link.
+    token: z.string().min(20).max(4096),
     password: passwordSchema,
     passwordConfirmation: z.string(),
   })
@@ -60,6 +61,13 @@ export const authResponse = z.object({
   user: userDto,
 });
 export type AuthResponse = z.infer<typeof authResponse>;
+
+export const authConfigDto = z.object({
+  /** `supabase`: users are created in Supabase → Authentication (no sign-up screen). */
+  provider: z.enum(['local', 'supabase']),
+  registrationEnabled: z.boolean(),
+});
+export type AuthConfigDto = z.infer<typeof authConfigDto>;
 
 export const updateUserRoleBody = z.object({ role: roleSchema, isActive: z.boolean().optional() });
 export type UpdateUserRoleBody = z.infer<typeof updateUserRoleBody>;

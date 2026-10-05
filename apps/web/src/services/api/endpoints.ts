@@ -11,6 +11,7 @@ import type {
   ProgressIndicatorsDto,
   CurveSyncReportDto,
   IntegrationStatusDto,
+  AuthConfigDto,
   AuthResponse,
   CreateCurveBody,
   CurveDetailDto,
@@ -48,6 +49,7 @@ export interface ValidationIssueDto {
 }
 
 export const authApi = {
+  config: () => api.get<AuthConfigDto>('/auth/config'),
   login: (body: LoginBody) => api.post<AuthResponse>('/auth/login', body, false),
   register: (body: RegisterBody) => api.post<AuthResponse>('/auth/register', body, false),
   logout: () => api.post<undefined>('/auth/logout', undefined, false),

@@ -18,6 +18,7 @@ import type { Env } from './config/env.js';
 import type { Database } from './database/client.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { JwtService } from './modules/auth/jwt.js';
+import { createSupabaseAuthClient, type SupabaseAuthClient } from './modules/auth/supabase-auth.js';
 import { curvesRoutes } from './modules/curves/curves.routes.js';
 import { feeIssuancesRoutes, inccIndicesRoutes } from './modules/fees/fees.routes.js';
 import { integrationsRoutes } from './modules/integrations/integrations.routes.js';
@@ -42,6 +43,8 @@ export interface BuildAppOptions {
   workCurveProvider?: WorkCurveProvider | null;
   /** Test seam for the "IEC Obra" integration (defaults to Microsoft Graph from env). */
   economicProvider?: EconomicIndicatorProvider | null;
+  /** Test seam for Supabase Auth (defaults to the GoTrue REST client from env). */
+  supabaseAuth?: SupabaseAuthClient | null;
 }
 
 /** Composition root: wires infrastructure, security plugins and versioned routes. */
@@ -51,6 +54,7 @@ export async function buildApp({
   mailer,
   workCurveProvider,
   economicProvider,
+  supabaseAuth,
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     trustProxy: env.TRUST_PROXY,
@@ -84,6 +88,12 @@ export async function buildApp({
     db,
     jwt: new JwtService(env.AUTH_SECRET, env.ACCESS_TOKEN_TTL_MINUTES * 60),
     mailer: mailer ?? createMailer(env, app.log),
+    supabaseAuth:
+      supabaseAuth !== undefined
+        ? supabaseAuth
+        : env.supabaseAuth
+          ? createSupabaseAuthClient(env.supabaseAuth, fetch, app.log)
+          : null,
   });
 
   registerErrorHandler(app, { spaFallback: Boolean(env.SERVE_WEB_DIR) });
