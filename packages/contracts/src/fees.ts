@@ -89,13 +89,14 @@ export const feeIssuanceResponse = z.object({
 });
 export type FeeIssuanceResponse = z.infer<typeof feeIssuanceResponse>;
 
-/** Issuance/INCC summary of the current projection (see CALCULATION_RULES §15). */
+/** INCC/issuance summary of the current projection (see CALCULATION_RULES §15 and §20). */
 export const feeAdjustmentDto = z.object({
-  firstIssuedMonth: z.string(),
-  lastIssuedMonth: z.string(),
+  /** null = no issuance yet (only the INCC changed the fee). */
+  firstIssuedMonth: z.string().nullable(),
+  lastIssuedMonth: z.string().nullable(),
   issuedTotal: z.string(),
   inccCorrection: z.string(),
-  balanceAfterIssued: z.string(),
+  balanceAfterIssued: z.string().nullable(),
   expectedFee: z.string(),
 });
 export type FeeAdjustmentDto = z.infer<typeof feeAdjustmentDto>;

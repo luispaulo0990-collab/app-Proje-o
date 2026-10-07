@@ -41,12 +41,6 @@ export const feeIssuancesRepository = {
     return result;
   },
 
-  /** Ids of the works that have at least one issuance (they depend on the INCC). */
-  async listWorkIds(db: Db): Promise<string[]> {
-    const rows = await db.selectDistinct({ workId: feeIssuances.workId }).from(feeIssuances);
-    return rows.map((r) => r.workId);
-  },
-
   async find(db: Db, workId: string, month: string): Promise<FeeIssuanceRow | undefined> {
     const [row] = await db
       .select()

@@ -3,6 +3,7 @@ import {
   Decimal,
   EngineValidationError,
   calculateProjection,
+  computeKpis,
   hydrateProjection,
   type ProjectionInput,
   type ProjectionResult,
@@ -147,10 +148,45 @@ describe('INCC correction', () => {
     expect(fees(r).slice(2)).toEqual(['25500.00', '25500.00', '25500.00']);
   });
 
-  it('ignores INCC when the work has no issuance yet', () => {
+  it('corrects the balance to be received even before the first issuance', () => {
+    // Data-base JAN/27 (start): FEV is corrected by the INCC of JAN → 100.000 × 1,01 = 101.000
+    // still to be received, projected by the curve over FEV..MAI.
     const r = calculateProjection({ ...flat, inccRates: [{ month: '2027-01-01', rate: '0.01' }] });
-    expect(r.totals.fee).toBe('100000.00');
-    expect(r.parameters.feeAdjustment).toBeNull();
+    expect(fees(r)).toEqual(['0.00', '25250.00', '25250.00', '25250.00', '25250.00']);
+    expect(r.totals).toMatchObject({ fee: '101000.00', expectedFee: '101000.00' });
+    expect(r.parameters.feeAdjustment).toEqual({
+      firstIssuedMonth: null,
+      lastIssuedMonth: null,
+      issuedTotal: '0.00',
+      inccCorrection: '1000.00',
+      balanceAfterIssued: null,
+      expectedFee: '101000.00',
+    });
+  });
+
+  it('"a receber" is the corrected balance, not total − received', () => {
+    // FEV, MAR received 25.000 each; ABR is corrected by the INCC of MAR (2%):
+    // (100.000 − 50.000) × 1,02 = 51.000 to be received in ABR/MAI.
+    const r = calculateProjection({ ...flat, inccRates: [{ month: '2027-03-01', rate: '0.02' }] });
+    expect(fees(r)).toEqual(['0.00', '25000.00', '25000.00', '25500.00', '25500.00']);
+    expect(computeKpis(r, '2027-03-01')).toMatchObject({
+      feeRealized: '50000.00',
+      feeRemaining: '51000.00',
+      feeProjected: '101000.00',
+    });
+  });
+
+  it('does not correct before the data-base', () => {
+    const r = calculateProjection({
+      ...flat,
+      inccBaseMonth: '2027-03-01',
+      inccRates: [
+        { month: '2027-01-01', rate: '0.01' },
+        { month: '2027-03-01', rate: '0.02' },
+      ],
+    });
+    // Only ABR (base + 1) is corrected, by the INCC of MAR.
+    expect(r.parameters.feeAdjustment?.inccCorrection).toBe('1000.00');
   });
 
   it('accepts a negative INCC (deflation)', () => {

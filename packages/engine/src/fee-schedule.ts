@@ -93,68 +93,95 @@ const only = (manual: ReadonlyMap<number, Decimal>, keep: (index: number) => boo
   new Map([...manual].filter(([i]) => keep(i)));
 
 /**
- * Fee series driven by the monthly invoices ("taxa emitida") and the INCC.
+ * Fee series driven by the INCC and the monthly invoices ("taxa emitida") — rule of 07/10/2026:
+ * the balance still to be received is corrected by the INCC from the data-base on, whether or
+ * not there are issuances ("a receber" ≠ total − recebido: it is the corrected balance).
  *
- * Without issuances: the contract fee spread by the curve (manual cells kept). Otherwise, with
- * A = first and L = last month with an issuance:
- * 1. months before A keep the regular distribution; balance = fee total − Σ(those months);
- * 2. each month M in A..L: balance × (1 + INCC) when a correction is due in M (every month for
- *    MONTHLY, every N months from the data-base otherwise — see createInccCorrector), then
- *    fee(M) = amount issued in M (a month without issuance inside the window was not invoiced:
- *    0) and balance −= fee(M);
- * 3. corrections due after L whose INCC is already published correct the balance as well
- *    (up to the first one still unpublished);
- * 4. the balance is projected over the months after L by the physical curve (competência
- *    M−1), keeping manual fee cells.
- * An issuance always prevails: manual cells it replaces, or that no longer fit in the
- * balance, are dropped with a warning — a real invoice can always be recorded.
+ * Month by month, in order:
+ * 1. a correction due in the month (every month for MONTHLY, every N months from the data-base
+ *    otherwise — see createInccCorrector) with its INCC published: balance × (1 + INCC);
+ * 2. months A..L (A = first, L = last issuance): fee = amount issued (a month without issuance
+ *    inside the window was not invoiced: 0);
+ * 3. other months: fee = their share of the balance projected by the physical curve
+ *    (competência M−1), keeping manual fee cells. The projection is redone from each correction
+ *    or issuance on, so the corrected balance is what the following months receive;
+ * 4. balance −= fee.
+ * Without INCC published nor issuances this is the original rule (contract fee by the curve).
+ * An issuance always prevails: manual cells it replaces, or that no longer fit in the balance,
+ * are dropped with a warning — a real invoice can always be recorded.
  */
 export function buildFeeSchedule(input: FeeScheduleInput, issues: ValidationIssue[]): FeeSchedule {
   const { periods, weights, manual, feeTotal } = input;
   const issued = parseIssuances(input.issuances, periods, issues);
-  if (issued.size === 0) {
-    const regular = distribute(weights, manual, feeTotal, MONEY_SCALE, 'FEE', issues);
-    return { ...regular, issued: new Set(), expected: feeTotal, adjustment: null };
-  }
-
   const positions = [...issued.keys()];
-  const first = Math.min(...positions);
-  const last = Math.max(...positions);
+  const first = positions.length > 0 ? Math.min(...positions) : -1;
+  const last = positions.length > 0 ? Math.max(...positions) : -1;
+  const inWindow = (i: number) => first >= 0 && i >= first && i <= last;
   const corrector = createInccCorrector(input.incc);
 
-  const before = distribute(
-    weights,
-    only(manual, (i) => i < first),
-    feeTotal,
-    MONEY_SCALE,
-    'FEE',
-    issues,
-  );
-  const values = before.values.slice(0, first);
-  let balance = feeTotal.minus(sum(values));
+  const values: Decimal[] = [];
+  const keptManual = new Set<number>();
+  let balance = feeTotal;
   let correction = ZERO;
-  /** Corrects the balance when due in the period; returns false if its INCC is unpublished. */
-  const applyIncc = (index: number): boolean => {
-    const step = corrector.at(periods[index]?.month ?? '');
+  let balanceAfterIssued: Decimal | null = null;
+  /** Current projection of the balance over the months from `start` on (null = redo it). */
+  let segment: { start: number; values: Decimal[]; manual: Set<number> } | null = null;
+
+  /**
+   * Projects the balance from `start` on by the curve. Before the first issuance only the manual
+   * cells before it count (later ones must not move the months already invoiced); afterwards,
+   * every manual cell from `start` on. Manual cells above a corrected balance are dropped.
+   */
+  const project = (start: number) => {
+    const total = Decimal.max(balance, ZERO);
+    const beforeWindow = first >= 0 && start < first;
+    let free = new Map(
+      [...manual]
+        .filter(([i]) => i >= start && !inWindow(i) && (!beforeWindow || i < first))
+        .map(([i, v]) => [i - start, v]),
+    );
+    if (start > 0 && sum([...free.values()]).greaterThan(total)) {
+      issues.push(
+        issue(
+          'FEE_MANUAL_DROPPED',
+          `Os ajustes manuais de taxa ultrapassam o saldo a receber (${total.toFixed(2)}) e foram descartados.`,
+          { series: 'FEE' },
+          'WARNING',
+        ),
+      );
+      free = new Map();
+    }
+    const projected = distribute(weights.slice(start), free, total, MONEY_SCALE, 'FEE', issues);
+    return { start, values: projected.values, manual: projected.manual };
+  };
+
+  for (let i = 0; i < periods.length; i++) {
+    const step = corrector.at(periods[i]?.month ?? '');
     if (step.status === 'APPLIED') {
       const corrected = correct(balance, step.rate);
       correction = correction.plus(corrected.minus(balance));
       balance = corrected;
+      segment = null; // the corrected balance is projected again from this month on
     }
-    return step.status !== 'MISSING';
-  };
 
-  for (let i = first; i <= last; i++) {
-    applyIncc(i);
-    const amount = issued.get(i) ?? ZERO;
-    values.push(amount);
-    balance = balance.minus(amount);
-  }
-  for (let i = last + 1; i < periods.length; i++) {
-    if (!applyIncc(i)) break;
+    if (inWindow(i)) {
+      const amount = issued.get(i) ?? ZERO;
+      values.push(amount);
+      balance = balance.minus(amount);
+      segment = null;
+      if (i === last) balanceAfterIssued = balance;
+      continue;
+    }
+
+    segment ??= project(i);
+    const offset = i - segment.start;
+    const value = segment.values[offset] ?? ZERO;
+    if (segment.manual.has(offset)) keptManual.add(i);
+    values.push(value);
+    balance = balance.minus(value);
   }
 
-  const superseded = only(manual, (i) => i >= first && i <= last);
+  const superseded = only(manual, inWindow);
   if (superseded.size > 0) {
     issues.push(
       issue(
@@ -165,74 +192,45 @@ export function buildFeeSchedule(input: FeeScheduleInput, issues: ValidationIssu
       ),
     );
   }
-
-  const balanceAfterIssued = balance;
-  const projectedTotal = Decimal.max(balance, ZERO);
-  if (balance.isNegative()) {
+  if (balanceAfterIssued?.isNegative()) {
     issues.push(
       issue(
         'FEE_ISSUED_ABOVE_BALANCE',
-        `As emissões ultrapassam a taxa corrigida em ${balance.negated().toFixed(2)}; nada resta a projetar.`,
+        `As emissões ultrapassam a taxa corrigida em ${balanceAfterIssued.negated().toFixed(2)}; nada resta a projetar.`,
         { series: 'FEE' },
         'WARNING',
       ),
     );
   }
-
-  const windowStart = last + 1;
-  const windowWeights = weights.slice(windowStart);
-  let windowManual = new Map(
-    [...only(manual, (i) => i >= windowStart)].map(([i, v]) => [i - windowStart, v]),
-  );
-  if (sum([...windowManual.values()]).greaterThan(projectedTotal)) {
-    issues.push(
-      issue(
-        'FEE_MANUAL_DROPPED',
-        `Os ajustes manuais de taxa após a última emissão ultrapassam o saldo a receber (${projectedTotal.toFixed(2)}) e foram descartados.`,
-        { series: 'FEE' },
-        'WARNING',
-      ),
-    );
-    windowManual = new Map();
-  }
-  if (windowWeights.length === 0 && projectedTotal.greaterThan(0)) {
+  if (balance.greaterThan(0) && last === periods.length - 1) {
     issues.push(
       issue(
         'FEE_BALANCE_UNALLOCATED',
-        `Saldo de ${projectedTotal.toFixed(2)} sem mês de recebimento restante na projeção.`,
+        `Saldo de ${balance.toFixed(2)} sem mês de recebimento restante na projeção.`,
         { series: 'FEE' },
         'WARNING',
       ),
     );
   }
-  const projected = distribute(
-    windowWeights,
-    windowManual,
-    projectedTotal,
-    MONEY_SCALE,
-    'FEE',
-    issues,
-  );
-  values.push(...projected.values);
 
-  const keptManual = [...before.manual].filter((i) => i < first);
-  const projectedManual = [...projected.manual].map((i) => i + windowStart);
   // What the series really adds up to: contract fee + INCC, adjusted by the edge cases
   // reported above (issued above the balance, balance without a month left).
   const expected = sum(values);
-
+  const adjusted = issued.size > 0 || !correction.isZero();
   return {
     values,
-    manual: new Set([...keptManual, ...projectedManual]),
-    issued: new Set(Array.from({ length: last - first + 1 }, (_, k) => first + k)),
+    manual: keptManual,
+    issued: new Set(first < 0 ? [] : Array.from({ length: last - first + 1 }, (_, k) => first + k)),
     expected,
-    adjustment: {
-      firstIssuedMonth: periods[first]?.month ?? '',
-      lastIssuedMonth: periods[last]?.month ?? '',
-      issuedTotal: sum([...issued.values()]).toFixed(MONEY_SCALE),
-      inccCorrection: correction.toFixed(MONEY_SCALE),
-      balanceAfterIssued: balanceAfterIssued.toFixed(MONEY_SCALE),
-      expectedFee: expected.toFixed(MONEY_SCALE),
-    },
+    adjustment: adjusted
+      ? {
+          firstIssuedMonth: first < 0 ? null : (periods[first]?.month ?? null),
+          lastIssuedMonth: last < 0 ? null : (periods[last]?.month ?? null),
+          issuedTotal: sum([...issued.values()]).toFixed(MONEY_SCALE),
+          inccCorrection: correction.toFixed(MONEY_SCALE),
+          balanceAfterIssued: balanceAfterIssued?.toFixed(MONEY_SCALE) ?? null,
+          expectedFee: expected.toFixed(MONEY_SCALE),
+        }
+      : null,
   };
 }

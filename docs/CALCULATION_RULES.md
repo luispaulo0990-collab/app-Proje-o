@@ -196,7 +196,7 @@ Substitui o antigo “Ajuste projeção de taxa” (recalibração pelo saldo). 
 - **Taxa emitida** (`fee_issuances`, por obra e mês, R$ 2 casas, ≥ 0): valor faturado no mês. Pela competência M−1 (§7), refere-se ao avanço do mês anterior.
 - **INCC mensal** (`incc_indices`, global): desde 02/10/2026 o cadastro é o **número-índice do mês** (ex.: INCC-DI de AGO/26 = 1.296,889; 6 casas). O motor deriva a variação: `INCC(M) = round8(índice(M) ÷ índice(M−1) − 1)` (HALF_EVEN, `inccRatesFromIndices`); sem índice de M−1 não há variação em M (1º mês do histórico ou lacuna). **O INCC do mês M−1 corrige o saldo a receber em M** (o INCC de setembro corrige outubro). Histórico carregado: INCC-DI (FGV), AGO/1994 → AGO/2026 (385 meses, `INCC-DI.xlsx` aba Plan1), inserido só nos meses ainda não cadastrados.
 
-**Regra** — sem nenhuma emissão, a taxa segue a §7 (orçamento × %taxa pela curva) e o INCC não é aplicado. Com emissões, sendo A o primeiro e L o último mês com emissão:
+**Regra** — (desde 07/10/2026 o INCC corrige o saldo também sem emissão: ver §20) — sem nenhuma emissão, a taxa segue a §7 (orçamento × %taxa pela curva). Com emissões, sendo A o primeiro e L o último mês com emissão:
 
 1. Meses antes de A mantêm a distribuição normal da curva. `saldo = taxa total − Σ(meses antes de A)`.
 2. Para cada mês M de A até L, em ordem: `saldo = round2(saldo × (1 + INCC(M−1)))` (HALF_EVEN; só sobre saldo positivo e só se o INCC de M−1 estiver cadastrado); `taxa(M) = valor emitido em M` — mês sem emissão dentro dessa janela foi faturado em **0** —; `saldo −= taxa(M)`.
@@ -292,3 +292,15 @@ Definido em 07/10/2026.
 - **Vários meses:** cada mês digitado (ex.: o mês que vem e 3 meses à frente) continua manual até ser apagado; só os outros meses são recalculados.
 - **Recálculo dinâmico (muda a §8):** qualquer alteração de entrada — cadastro da obra, curva própria/tendência (§11, §18), taxa emitida, INCC, vigências (§17) — gera nova versão **preservando** os ajustes manuais, e todas as telas são atualizadas. A projeção só fica “Revisar ajustes” (escolher preservar/substituir) quando algum ajuste manual não cabe mais: cai fora do novo cronograma ou ultrapassa o total (`regenerateOrFlagStale`).
 - Sem taxa emitida, o saldo é redistribuído em todos os meses não manuais, inclusive meses passados (são projeção até haver emissão). Com taxa emitida, só os meses depois da última emissão absorvem a diferença (§15).
+
+## 20. Taxa a receber corrigida pelo INCC (todas as obras)
+
+Definido em 07/10/2026. Motor 0.6.0 (`buildFeeSchedule`). **Substitui** a regra da §15 de que o INCC só corrigia o saldo depois da 1ª taxa emitida.
+
+- **A receber ≠ taxa total − recebido.** O saldo a receber é corrigido pelo INCC a partir da **data-base** da obra (mês-base do INCC; padrão = mês de início), com ou sem taxa emitida, na periodicidade da obra (§17). A 1ª correção cai em data-base + N (mensal: o mês seguinte à data-base, pelo INCC da data-base).
+- **Mês a mês:** (1) correção devida e INCC publicado → `saldo × (1 + INCC)`; (2) mês com emissão → valor emitido (meses sem emissão entre a 1ª e a última = 0); (3) demais meses → sua parte do saldo pela curva física, mantidos os ajustes manuais; (4) `saldo −= taxa do mês`. A cada correção (ou emissão) o saldo corrigido é **reprojetado** nos meses seguintes.
+- Correções futuras (INCC ainda não publicado) não são estimadas: o saldo projetado é corrigido até o último INCC publicado.
+- **Onde aparece:** coluna “A receber” e totais do Consolidado, cartões “A receber” do Consolidado e da Projeção, “Taxa prevista” (= taxa contratual + correções). Recebida + A receber = Taxa prevista, centavo a centavo.
+- Ex.: taxa 100.000, curva 4 × 25%, INCC de MAR = 2%. FEV e MAR recebem 25.000; em ABR o saldo (50.000) vira 51.000 → ABR e MAI 25.500. Em MAR, **a receber = 51.000** (antes: 50.000).
+- Qualquer INCC salvo, importado ou removido recalcula **todas** as obras (antes, só as com emissão). Ao aplicar as migrations, as projeções geradas com motor < 0.6.0 são recalculadas uma vez (ajustes manuais preservados), com “Atualização das regras de taxa: saldo a receber corrigido pelo INCC” no histórico.
+- `parameters.feeAdjustment` passa a existir também sem emissão (`firstIssuedMonth`/`lastIssuedMonth`/`balanceAfterIssued` = null).

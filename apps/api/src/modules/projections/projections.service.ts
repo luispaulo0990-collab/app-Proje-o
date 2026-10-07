@@ -57,7 +57,7 @@ import type { Actor, AppDeps, AuthUser } from '../../types.js';
 import { currentMonth, toMonth } from '../../utils/dates.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 
-export const ENGINE_VERSION = '0.5.0';
+export const ENGINE_VERSION = '0.6.0';
 
 /** Snapshot persisted with every projection version (traceability — spec §39). */
 export interface ProjectionParameters {
@@ -128,9 +128,29 @@ export function hydrateStoredProjection(
   });
 }
 
-/** True when the version was generated before the current fee rules (M−1, issuances, INCC). */
+/** Engine version from which the INCC corrects the balance of every work (07/10/2026). */
+const INCC_ON_EVERY_WORK_SINCE = [0, 6, 0];
+
+const olderThan = (version: string | undefined, minimum: readonly number[]) => {
+  const parts = (version ?? '0.0.0').split('.').map(Number);
+  for (let i = 0; i < minimum.length; i++) {
+    const a = parts[i] ?? 0;
+    const b = minimum[i] ?? 0;
+    if (a !== b) return a < b;
+  }
+  return false;
+};
+
+/**
+ * True when the version was generated under older fee rules: configurable lag / "Ajuste projeção
+ * de taxa" (≤ 0.2.0) or the INCC applied only after the first issuance (< 0.6.0).
+ */
 export function usesOutdatedFeeRules(params: ProjectionParameters): boolean {
-  return params.feeLagMonths !== FEE_COMPETENCE_LAG_MONTHS || params.feeRecalibration != null;
+  return (
+    params.feeLagMonths !== FEE_COMPETENCE_LAG_MONTHS ||
+    params.feeRecalibration != null ||
+    olderThan(params.engineVersion, INCC_ON_EVERY_WORK_SINCE)
+  );
 }
 
 /** Manual cell anchored to its competence month, so it survives a change of start month. */

@@ -91,16 +91,17 @@ export interface FeeTerm {
   inccPeriodicity: InccPeriodicity;
 }
 
-/** How issuances and INCC changed the fee of a work (persisted with each version). */
+/** How the INCC and the issuances changed the fee of a work (persisted with each version). */
 export interface FeeAdjustment {
-  firstIssuedMonth: IsoMonth;
-  lastIssuedMonth: IsoMonth;
+  /** null = no issuance yet (only the INCC changed the fee). */
+  firstIssuedMonth: IsoMonth | null;
+  lastIssuedMonth: IsoMonth | null;
   /** Σ issued (R$). */
   issuedTotal: DecimalString;
   /** Σ INCC corrections applied to the balance (R$). */
   inccCorrection: DecimalString;
-  /** Balance still to be received after the last issuance, already corrected (R$). */
-  balanceAfterIssued: DecimalString;
+  /** Balance still to be received right after the last issuance (R$); null = no issuance. */
+  balanceAfterIssued: DecimalString | null;
   /** Contract fee + INCC corrections (R$). */
   expectedFee: DecimalString;
 }

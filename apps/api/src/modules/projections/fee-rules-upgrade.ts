@@ -7,11 +7,12 @@ import {
   type ProjectionParameters,
 } from './projections.service.js';
 
-const UPGRADE_NOTE = 'Atualização das regras de taxa: competência M−1, taxa emitida e INCC';
+const UPGRADE_NOTE = 'Atualização das regras de taxa: saldo a receber corrigido pelo INCC';
 
 /**
- * One-off data upgrade (idempotent): current projections generated with the previous fee rules
- * (configurable lag, "Ajuste projeção de taxa") get a new version under the current rules.
+ * One-off data upgrade (idempotent): current projections generated with previous fee rules
+ * (configurable lag, "Ajuste projeção de taxa", INCC only after the first issuance) get a new
+ * version under the current rules.
  * Manual cells are kept; each upgrade is recorded in the work's history. Returns how many
  * projections were upgraded.
  */

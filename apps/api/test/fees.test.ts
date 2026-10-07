@@ -217,6 +217,28 @@ describe('INCC number-index (/incc-indices)', () => {
     expect((await consolidatedAt('2027-03-15')).work.feeRemaining).toBe('99596.00');
   });
 
+  it('"A receber" is the balance corrected by the INCC even without any issuance', async () => {
+    await inject('PUT', '/incc-indices', {
+      items: [
+        { month: '2026-12', index: '1000' },
+        { month: '2027-01', index: '1010' },
+      ],
+    });
+    // Data-base JAN/27: FEV is corrected by the INCC of JAN (1%) → 101.000 to be received from
+    // FEV on; FEV + MAR = 404,00 + 1.212,00 → a receber after MAR = 99.384,00 (not 98.400,00).
+    const { work, totals } = await consolidatedAt('2027-03-15');
+    expect(work).toMatchObject({
+      feeRealized: '1616.00',
+      feeRemaining: '99384.00',
+      feeProjected: '101000.00',
+      feeAdjustment: { firstIssuedMonth: null, inccCorrection: '1000.00' },
+    });
+    expect(totals.feeRemaining).toBe('99384.00');
+    const kpis = (await inject('GET', `/projections/${workId}?referenceDate=2027-03-15`)).json()
+      .kpis;
+    expect(kpis.feeRemaining).toBe('99384.00');
+  });
+
   it('saves many months at once (history) and recalculates once', async () => {
     await inject('PUT', `/works/${workId}/fee-issuances/2027-03`, { amount: '1000.00' });
     const res = await inject('PUT', '/incc-indices', {
@@ -342,6 +364,6 @@ describe('upgrade of projections generated under the previous fee rules', () => 
     const projection = (await inject('GET', `/projections/${workId}`)).json();
     expect(projection.fee).toHaveLength(23);
     expect(projection.manualCount).toBe(1);
-    expect(projection.note).toContain('competência M−1');
+    expect(projection.note).toContain('saldo a receber corrigido pelo INCC');
   });
 });

@@ -1,7 +1,7 @@
 import { canonicalizeCurve, curveFromCumulative } from '@unita/engine';
 import { hashPassword } from '../modules/auth/crypto.js';
 import type { Db } from './client.js';
-import { regenerateWorksWithIssuances } from '../modules/fees/fees.service.js';
+import { regenerateAllWorks } from '../modules/fees/fees.service.js';
 import { loadInccHistory } from './incc-history.js';
 import { importPainelWorks } from './painel-import.js';
 import { curvesRepository } from './repositories/curves.repository.js';
@@ -97,8 +97,8 @@ export async function seedDatabase(db: Db, options: SeedOptions = {}): Promise<v
 
     const incc = await loadInccHistory(db);
     if (incc > 0) {
-      // New months of INCC change the corrected balance of works that already have issuances.
-      const works = await regenerateWorksWithIssuances(
+      // New months of INCC change the corrected balance to be received of every work.
+      const works = await regenerateAllWorks(
         db,
         { user: null, integration: 'carga:incc-di' },
         `Histórico INCC-DI carregado (${incc} meses)`,

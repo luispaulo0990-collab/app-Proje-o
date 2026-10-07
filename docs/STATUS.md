@@ -127,6 +127,14 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 - Testes: engine 125 · API 105 · web 7.
 - **A decidir com o usuário:** se meses passados sem taxa emitida devem ficar fixos (hoje também absorvem a redistribuição).
 
+## Concluído (07/10/2026 — A receber corrigido pelo INCC)
+
+- Pedido do usuário: o valor a receber não é “total − recebido”; ele é corrigido mensalmente pelo INCC, em todas as telas que mostram taxa a receber.
+- Motor 0.6.0: o INCC corrige o saldo de todas as obras desde a data-base (antes, só depois da 1ª taxa emitida); o saldo corrigido é reprojetado pela curva. CALCULATION_RULES §20.
+- API: INCC salvo/importado/removido recalcula todas as obras; projeções antigas atualizadas uma vez na migration.
+- Exemplo real (demonstração, INCC-DI carregado): Vila das Belezas, taxa contratual R$ 3.976.901,10 → taxa prevista corrigida R$ 4.247.919,76.
+- Testes: engine 127 · API 106 · web 7.
+
 ## Próximos passos
 
 1. **Fase 6** — grade editável estilo Excel (TanStack Table + virtualização): edição de célula, Enter/Tab/setas, copiar/colar, seleção múltipla, marcação manual, salvar em lote (PUT /projections/:workId já existe); visão de carteira já existe (Consolidado, somente leitura); falta virtualizar para centenas de obras.

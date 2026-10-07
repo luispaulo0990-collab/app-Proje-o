@@ -62,16 +62,13 @@ function toInccDtos(rows: readonly InccIndexWithAuthor[]): InccIndexDto[] {
 const canonicalIndex = (v: string) => toFixedString(new Decimal(v), INCC_INDEX_SCALE);
 
 /**
- * INCC of a month is used from the next month on: every work with issuances may change.
- * Exported for the INCC history load (seed).
+ * The INCC corrects the balance to be received of EVERY work (rule of 07/10/2026), so any change
+ * regenerates all projections, keeping manual cells. Exported for the INCC history load (seed).
  */
-export async function regenerateWorksWithIssuances(tx: Db, actor: Actor, note: string) {
-  const ids = await feeIssuancesRepository.listWorkIds(tx);
-  for (const id of ids) {
-    const found = await worksRepository.findById(tx, id);
-    if (found) await regenerateKeepingManualCells(tx, found.work, actor, note);
-  }
-  return ids.length;
+export async function regenerateAllWorks(tx: Db, actor: Actor, note: string) {
+  const works = await worksRepository.listAll(tx, { includeArchived: true });
+  for (const w of works) await regenerateKeepingManualCells(tx, w.work, actor, note);
+  return works.length;
 }
 
 /**
@@ -198,7 +195,7 @@ export function createFeesService({ db }: AppDeps) {
           origin: 'MANUAL',
           metadata: { note: body.note ?? null, integration: actor.integration },
         });
-        const recalculatedWorks = await regenerateWorksWithIssuances(
+        const recalculatedWorks = await regenerateAllWorks(
           tx,
           actor,
           `INCC ${label(month)} (corrige ${label(addMonthsIso(month, 1))})`,
@@ -236,7 +233,7 @@ export function createFeesService({ db }: AppDeps) {
           origin: 'MANUAL',
           metadata: { note: body.note ?? null, integration: actor.integration },
         });
-        const recalculatedWorks = await regenerateWorksWithIssuances(
+        const recalculatedWorks = await regenerateAllWorks(
           tx,
           actor,
           `INCC ${label(first)} a ${label(last)} importado`,
@@ -259,7 +256,7 @@ export function createFeesService({ db }: AppDeps) {
           origin: 'MANUAL',
           metadata: { integration: actor.integration },
         });
-        const recalculatedWorks = await regenerateWorksWithIssuances(
+        const recalculatedWorks = await regenerateAllWorks(
           tx,
           actor,
           `INCC ${label(month)} removido`,

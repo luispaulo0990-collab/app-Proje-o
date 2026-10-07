@@ -136,7 +136,7 @@ export interface InccCorrectorInput {
 /**
  * Decides, month by month and in chronological order, when the balance is corrected and by
  * how much:
- * - MONTHLY: every month M is corrected by the INCC of M−1 (original rule);
+ * - MONTHLY: every month M after the data-base is corrected by the INCC of M−1;
  * - every N months (QUARTERLY = 3…): months M = data-base + k·N (k ≥ 1) are corrected by the
  *   INCC accumulated over the N months before M (e.g. data-base JAN, quarterly: APR is corrected
  *   by the variation of JAN..MAR).
@@ -148,8 +148,8 @@ export function createInccCorrector({ variation, periodicityAt, baseMonth }: Inc
   /** Last INCC month already used in a correction. */
   let lastApplied: IsoMonth | null = null;
 
+  /** The contract value is at the data-base: the first correction falls in base + N. */
   const isDue = (month: IsoMonth, months: number) => {
-    if (months === 1) return true;
     const elapsed = monthDiff(base, parseIsoMonth(month));
     return elapsed > 0 && elapsed % months === 0;
   };

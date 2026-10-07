@@ -34,7 +34,7 @@ const toMonthInput = (iso: string) => iso.slice(0, 7);
 /**
  * "INCC do mês": the published number-index typed by the user. The engine derives the variation
  * (index M ÷ index M−1 − 1), which corrects the fee still to be received from M+1 on.
- * Saving recalculates every work with issued fee.
+ * Saving recalculates every work (the INCC corrects the balance to be received of all of them).
  */
 export function InccPanel({
   referenceMonth,
@@ -59,11 +59,7 @@ export function InccPanel({
 
   const onSuccess = (recalculated: number, text: string) => {
     setError(null);
-    setNotice(
-      recalculated > 0
-        ? `${text} ${recalculated} obra(s) com taxa emitida recalculada(s).`
-        : `${text} Nenhuma obra tem taxa emitida ainda: a correção vale a partir da primeira emissão.`,
-    );
+    setNotice(`${text} ${recalculated} obra(s) recalculada(s): o saldo a receber foi corrigido.`);
   };
 
   const submit = (e: FormEvent) => {
@@ -101,7 +97,7 @@ export function InccPanel({
       <CardHeader
         title="INCC mensal (número-índice)"
         description={
-          `Informe o índice INCC do mês; a variação (índice do mês ÷ índice do mês anterior − 1) corrige a taxa a receber a partir do mês seguinte (ex.: INCC de ${formatMonth(addMonthsIso(referenceMonth, -1))} corrige ${formatMonth(referenceMonth)}).` +
+          `Informe o índice INCC do mês; a variação (índice do mês ÷ índice do mês anterior − 1) corrige o saldo de taxa a receber de todas as obras a partir do mês seguinte (ex.: INCC de ${formatMonth(addMonthsIso(referenceMonth, -1))} corrige ${formatMonth(referenceMonth)}).` +
           (first && last
             ? ` Histórico: ${formatMonth(first.month)} a ${formatMonth(last.month)} (${all.length} meses).`
             : '')
@@ -194,7 +190,7 @@ export function InccPanel({
         ]}
       >
         A correção do INCC de {toRemove ? formatMonth(toRemove.month) : ''} deixa de ser aplicada e
-        as obras com taxa emitida são recalculadas. A remoção fica registrada no histórico.
+        o saldo a receber de todas as obras é recalculado. A remoção fica registrada no histórico.
       </ConfirmDialog>
     </Card>
   );

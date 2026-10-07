@@ -46,9 +46,11 @@ describe('import of "Painel de obras.xlsx" (demo data)', () => {
     const vilaDasBelezas = consolidated.works.find(
       (w: { name: string }) => w.name === 'Vila das Belezas',
     );
+    // Contract fee 3.976.901,10 (budget × rate) corrected by the real INCC-DI history loaded by
+    // the seed since the data-base (ABR/25): the balance to be received is always corrected.
     expect(vilaDasBelezas).toMatchObject({
       clientName: 'REV3',
-      feeProjected: '3976901.10',
+      feeProjected: '4247919.76',
       startDate: '2025-04-01',
     });
     expect(consolidated.works.filter((w: { name: string }) => w.name === 'Tucuruvi')).toHaveLength(
