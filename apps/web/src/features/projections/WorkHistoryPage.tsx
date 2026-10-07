@@ -13,6 +13,8 @@ const ACTIONS: Record<string, string> = {
   RECALCULATE: 'Recálculo',
   FEE_ISSUANCE: 'Taxa emitida',
   FEE_ISSUANCE_REMOVED: 'Taxa emitida removida',
+  FEE_TERM: 'Alteração de taxa/INCC',
+  FEE_TERM_REMOVED: 'Alteração de taxa/INCC removida',
   FEE_RECALIBRATION: 'Ajuste de taxa (antigo)',
   FEE_RECALIBRATION_CLEARED: 'Ajuste de taxa removido (antigo)',
   PROJECTION_STALE: 'Projeção desatualizada',

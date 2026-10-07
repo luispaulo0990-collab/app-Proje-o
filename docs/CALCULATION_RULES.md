@@ -234,3 +234,37 @@ Definido em 02/10/2026.
 - **Canonização:** IEC com 6 casas (`1.020000`), resultado em R$ com 2 casas, arredondamento half-even. **IEC = 0 é tratado como “sem IEC”** e um mês com IEC 0 e resultado 0 não é um fechamento (a planilha publica zeros antes do fechamento).
 - **Consolidado:** coluna “IEC obra / resultado” mostra o **último fechamento com mês ≤ mês de referência** (`computeEconomicIndicators`, motor): índice em cima, resultado projetado embaixo (vermelho quando negativo). Sem fechamento → “Aguardando API”.
 - **Sincronização:** roda junto com “Simular / Importar” das curvas; erro de leitura da aba BD_Econômico vira aviso no relatório e não bloqueia as curvas. Também é aceito pelo endpoint genérico `PUT /works/:id/economic-indicators`.
+
+## 17. Vigências da taxa e periodicidade da correção pelo INCC
+
+Definido em 07/10/2026. Motor 0.4.0 (`packages/engine/src/fee-terms.ts`, `incc.ts`). Os parâmetros de taxa variam muito de cliente para cliente, por isso tudo é configurável **por obra** e **ao longo do tempo**.
+
+**Condições da obra**
+
+- **Cadastro:** taxa (%), periodicidade da correção pelo INCC (padrão mensal) e **mês-base do INCC** (data-base do ciclo; vazio = mês de início planejado).
+- **Vigências** (`work_fee_terms`, aba “Taxa e INCC” da obra): a partir de um mês, uma **nova taxa** e uma **nova periodicidade**, válidas até a próxima vigência. Informa-se o **valor novo** (de 8% para 9% → `0.09`), nunca a variação.
+
+**Taxa vigente no mês** — `taxa(M) = %físico(M−1) × orçamento × taxa vigente em M` (M = mês de recebimento, competência M−1).
+
+- Uma única taxa no horizonte → regra original: `round2(orçamento × taxa)` distribuída pela curva.
+- Com mudança: cada mês pesa `%físico × taxa vigente`; total = `round2(orçamento × Σ(%físico × taxa) ÷ Σ%físico)`, distribuído pelo maior resto. Meses anteriores à mudança não são alterados.
+- Com taxa emitida, a regra da §15 é aplicada sobre esse total e esses pesos: o saldo após a última emissão é projetado já com a taxa de cada mês.
+- Ex.: 4 × 25%, orçamento 1.000.000, 10% e vigência de ABR a 8% → 0 · 25.000 · 25.000 · 20.000 · 20.000 (total 90.000).
+
+**Periodicidade da correção** (só a partir da 1ª emissão, como na §15)
+
+| Periodicidade | N   | Meses corrigidos                              |
+| ------------- | --- | --------------------------------------------- |
+| Mensal        | 1   | todo mês M, pelo INCC de M−1 (regra original) |
+| Trimestral    | 3   | data-base + 3, + 6, …                         |
+| Quadrimestral | 4   | data-base + 4, + 8, …                         |
+| Semestral     | 6   | data-base + 6, + 12, …                        |
+| Anual         | 12  | data-base + 12, + 24, …                       |
+
+- A correção usa a **variação acumulada da janela**: `índice(M−1) ÷ índice(mês anterior à janela) − 1` (8 casas, HALF_EVEN). Ex.: data-base JAN, trimestral → ABR é corrigido pela variação de JAN..MAR.
+- A janela começa logo depois do último mês de INCC já aplicado: trocar a periodicidade (ou publicar um índice atrasado) nunca conta um mês duas vezes nem pula um mês.
+- Correção devida sem o índice publicado → não é aplicada; depois da última emissão a projeção para na primeira correção ainda sem índice (como na §15).
+
+**Avisos e rejeições:** `INVALID_FEE_TERM` (mês, taxa fora de 0–100% ou periodicidade inválida), `FEE_TERM_DUPLICATED`, `INVALID_INCC_PERIODICITY`, `INVALID_INCC_BASE_MONTH`; `FEE_TERM_OUT_OF_RANGE` (aviso: vigência depois do último mês de recebimento).
+
+**Rastreabilidade:** cada vigência salva ou removida gera nova versão da projeção (ajustes manuais preservados) e entra no histórico (`FEE_TERM`, `FEE_TERM_REMOVED`). `parameters` de cada versão guarda `feeTerms`, `inccPeriodicity`, `inccBaseMonth` e `expectedFee`. API: `GET/PUT/DELETE /works/:id/fee-terms[/:mes]` (`{ feeRate, inccPeriodicity, note? }`, JWT EDITOR ou `X-Api-Key`).

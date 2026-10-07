@@ -31,7 +31,7 @@ export function WorkSettingsPage() {
       <Card>
         <CardHeader
           title="Parâmetros de cálculo"
-          description="Defasagem da taxa, curva e cronograma são editados no cadastro da obra."
+          description="Taxa inicial, correção pelo INCC, curva e cronograma são editados no cadastro da obra; mudanças de taxa ao longo do tempo ficam na aba Taxa e INCC."
         />
         <div className="flex flex-wrap gap-2 p-5">
           {can('EDITOR') && (

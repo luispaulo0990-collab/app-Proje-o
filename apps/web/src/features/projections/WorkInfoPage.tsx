@@ -1,7 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/useAuth';
-import { formatCurrency, formatDate, formatNumber, formatPercent } from '@/utils/format';
+import { INCC_PERIODICITY } from '@/features/fee-terms/feeTerms';
+import {
+  formatCurrency,
+  formatDate,
+  formatMonth,
+  formatNumber,
+  formatPercent,
+} from '@/utils/format';
 import { useWorkContext } from './WorkLayout';
 
 export function WorkInfoPage() {
@@ -13,8 +20,10 @@ export function WorkInfoPage() {
     ['Cliente', w.client.name],
     ['Unidades (UH)', formatNumber(w.units)],
     ['Orçamento raso', formatCurrency(w.budget)],
-    ['Taxa de administração', formatPercent(w.feeRate)],
-    ['Taxa total prevista', formatCurrency(w.feeTotal)],
+    ['Taxa de administração (cadastro)', formatPercent(w.feeRate)],
+    ['Taxa total pela taxa do cadastro', formatCurrency(w.feeTotal)],
+    ['Correção pelo INCC (cadastro)', INCC_PERIODICITY[w.inccPeriodicity].label],
+    ['Mês-base do INCC', formatMonth(w.inccBaseMonth ?? w.startDate)],
     ['Recebimento da taxa', 'Mês seguinte ao avanço (competência M−1)'],
     ['Sistema construtivo', w.constructionSystem],
     ['Curva', `${w.curve.name} — V${w.curve.version}`],

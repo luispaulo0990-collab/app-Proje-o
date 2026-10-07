@@ -49,6 +49,13 @@ export const router = createBrowserRouter([
                 lazy: page(() => import('@/features/projections/WorkCurvePage'), 'WorkCurvePage'),
               },
               {
+                path: 'taxa',
+                lazy: page(
+                  () => import('@/features/fee-terms/WorkFeeTermsPage'),
+                  'WorkFeeTermsPage',
+                ),
+              },
+              {
                 path: 'historico',
                 lazy: page(
                   () => import('@/features/projections/WorkHistoryPage'),

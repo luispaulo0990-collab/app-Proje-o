@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { workStatusSchema, type WorkBodyInput, type WorkDto } from '@unita/contracts';
+import {
+  inccPeriodicitySchema,
+  workStatusSchema,
+  type WorkBodyInput,
+  type WorkDto,
+} from '@unita/contracts';
 import {
   decimalToInput,
   fractionToPercentInput,
@@ -27,6 +32,9 @@ export const workFormSchema = z.object({
     const f = percentInputToFraction(v);
     return f !== null && !f.startsWith('-') && Number(f) <= 1;
   }, 'Informe um percentual entre 0 e 100.'),
+  inccPeriodicity: inccPeriodicitySchema,
+  /** `AAAA-MM` from `<input type="month">`; empty = start month of the work. */
+  inccBaseMonth: z.string().regex(/^(\d{4}-\d{2})?$/, 'Mês inválido.'),
   constructionSystem: z.string().trim().min(2, 'Informe o sistema construtivo.').max(120),
   curveId: z.string().min(1, 'Selecione uma curva.'),
   curveVersionId: z.string().min(1, 'Selecione uma curva.'),
@@ -50,6 +58,8 @@ export const emptyWorkForm: WorkFormValues = {
   units: '',
   budget: '',
   feeRatePct: '',
+  inccPeriodicity: 'MONTHLY',
+  inccBaseMonth: '',
   constructionSystem: '',
   curveId: '',
   curveVersionId: '',
@@ -65,6 +75,8 @@ export function workToForm(w: WorkDto): WorkFormValues {
     units: String(w.units),
     budget: decimalToInput(w.budget),
     feeRatePct: fractionToPercentInput(w.feeRate),
+    inccPeriodicity: w.inccPeriodicity,
+    inccBaseMonth: w.inccBaseMonth?.slice(0, 7) ?? '',
     constructionSystem: w.constructionSystem,
     curveId: w.curve.id,
     curveVersionId: w.curve.versionId,
@@ -81,6 +93,8 @@ export function formToBody(v: WorkFormValues): WorkBodyInput {
     units: Number(v.units),
     budget: parseDecimalInput(v.budget) ?? '',
     feeRate: percentInputToFraction(v.feeRatePct) ?? '',
+    inccPeriodicity: v.inccPeriodicity,
+    inccBaseMonth: v.inccBaseMonth || null,
     constructionSystem: v.constructionSystem,
     curveVersionId: v.curveVersionId,
     startDate: v.startDate,

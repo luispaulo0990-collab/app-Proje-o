@@ -6,6 +6,7 @@ import { buildSchedule } from '@unita/engine';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert, Button, Card, CardHeader, Field, Input, Select, Skeleton } from '@/components/ui';
 import { useCurves } from '@/features/curves/hooks';
+import { INCC_PERIODICITY_OPTIONS } from '@/features/fee-terms/feeTerms';
 import { errorMessage } from '@/services/api/client';
 import { formatDate } from '@/utils/format';
 import { useClients, useSaveWork, useWork } from './hooks';
@@ -145,6 +146,26 @@ export function WorkFormPage() {
             hint="Ex.: 9 ou 9,5"
           >
             <Input inputMode="decimal" {...register('feeRatePct')} />
+          </Field>
+          <Field
+            label="Correção pelo INCC"
+            error={errors.inccPeriodicity?.message}
+            hint="Mudanças futuras de taxa ou de correção: aba Taxa e INCC da obra."
+          >
+            <Select {...register('inccPeriodicity')}>
+              {INCC_PERIODICITY_OPTIONS.map(([value, option]) => (
+                <option key={value} value={value}>
+                  {option.label} — {option.hint}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Mês-base do INCC"
+            error={errors.inccBaseMonth?.message}
+            hint="Conta os períodos da correção (trimestre, ano…). Vazio = mês de início."
+          >
+            <Input type="month" {...register('inccBaseMonth')} />
           </Field>
           <Field label="Sistema construtivo" error={errors.constructionSystem?.message}>
             <Input list="systems" autoComplete="off" {...register('constructionSystem')} />

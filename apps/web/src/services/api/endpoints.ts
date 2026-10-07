@@ -5,6 +5,9 @@ import type {
   ConsolidatedDto,
   FeeIssuanceBody,
   FeeIssuanceResponse,
+  FeeTermBody,
+  FeeTermListResponse,
+  FeeTermResponse,
   InccIndexBody,
   InccIndexListResponse,
   InccIndexResponse,
@@ -132,6 +135,12 @@ export const feesApi = {
   setIncc: (month: string, body: InccIndexBody) =>
     api.put<InccIndexResponse>(`/incc-indices/${month}`, body),
   deleteIncc: (month: string) => api.delete<InccIndexResponse>(`/incc-indices/${month}`),
+  /** Fee conditions over time ("vigências") of a work. */
+  listTerms: (workId: string) => api.get<FeeTermListResponse>(`/works/${workId}/fee-terms`),
+  setTerm: (workId: string, month: string, body: FeeTermBody) =>
+    api.put<FeeTermResponse>(`/works/${workId}/fee-terms/${month}`, body),
+  deleteTerm: (workId: string, month: string) =>
+    api.delete<FeeTermResponse>(`/works/${workId}/fee-terms/${month}`),
 };
 
 export const workCurvesApi = {

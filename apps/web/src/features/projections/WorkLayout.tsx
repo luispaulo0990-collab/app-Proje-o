@@ -10,6 +10,7 @@ const SECTIONS = [
   { to: '', label: 'Projeção', end: true },
   { to: 'informacoes', label: 'Informações da obra' },
   { to: 'curva', label: 'Curva' },
+  { to: 'taxa', label: 'Taxa e INCC' },
   { to: 'historico', label: 'Histórico' },
   { to: 'configuracoes', label: 'Configurações' },
 ];

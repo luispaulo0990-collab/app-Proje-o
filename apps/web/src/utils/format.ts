@@ -44,6 +44,12 @@ export function formatMonth(iso: string): string {
   return `${MONTHS[Number(m) - 1]}/${(y ?? '').slice(2)}`;
 }
 
+/** Current month in the browser as `AAAA-MM` (value of an `<input type="month">`). */
+export function currentMonthInput(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 /** Moves the decimal point of a decimal string (`places` > 0 multiplies by 10^places). */
 export function shiftDecimal(value: string, places: number): string {
   const negative = value.startsWith('-');

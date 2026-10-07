@@ -1,6 +1,6 @@
 # Status do projeto — Painel de Obras Unità
 
-Atualizado em 05/10/2026.
+Atualizado em 07/10/2026.
 
 ## Onde está o código
 
@@ -101,6 +101,15 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 - Deploy na Vercel (`painel-obras-unita`, região `gru1`). Correção: `content-disposition` fixado em 1.x (`overrides`) e `@fastify/static` carregado só no modo demonstração — o runtime da Vercel não faz `require()` de ESM (`ERR_REQUIRE_ESM`).
 - Banco da demonstração recuperado (WAL corrompido → `pg_resetwal` numa cópia) e exportado em `.demo-data/recuperado.tar.gz`; `db:copy` usa esse arquivo quando existe (`pglite:dump=`).
 - Microsoft Graph na Vercel: variáveis `MS_GRAPH_*` + `CRON_SECRET`; importação diária automática (Vercel Cron 09:00 UTC → `GET /integrations/work-curves/cron`); `maxDuration` 300 s. Testes: API 92.
+
+## Concluído (07/10/2026 — Vigências da taxa e periodicidade do INCC)
+
+- Pedido do usuário: mudar a taxa “a partir de agora” informando a **taxa nova** (não a variação) e tornar mutável a correção pelo INCC, com periodicidade **mensal, trimestral, quadrimestral, semestral ou anual** (a variação do INCC no período corrige o recebimento).
+- Motor 0.4.0: `fee-terms.ts` (taxa vigente por mês), `createInccCorrector` (janelas a partir da data-base, sem dupla contagem na troca de periodicidade), variação calculada direto do número-índice. Regras: CALCULATION_RULES §17.
+- Banco: migration `0008_work_fee_terms`. API: `/works/:id/fee-terms`. Web: aba **Taxa e INCC** na obra; cadastro da obra com “Correção pelo INCC” e “Mês-base do INCC”.
+- Limpeza: removidos `publicar-github.bat` (gerava commits repetidos com a mesma mensagem), `apps/api/vercel.json` (duplicado), dependências e exports sem uso.
+- Testes: engine 114 · API 100 · web 7.
+- **A decidir com o usuário:** se a correção deve começar antes da 1ª taxa emitida (hoje, como na §15, o INCC só corrige o saldo depois da 1ª emissão); se a duplicação de obra deve copiar as vigências.
 
 ## Próximos passos
 

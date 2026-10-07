@@ -17,12 +17,15 @@ export const useConsolidated = (filters: PortfolioFilters) =>
 export const useInccIndices = () =>
   useQuery({ queryKey: portfolioKeys.incc, queryFn: feesApi.listIncc });
 
-/** Fee inputs create new projection versions: every derived view is refreshed. */
-function useInvalidateFees() {
+/**
+ * Fee inputs (issuances, INCC, fee terms) create new projection versions: every derived view is
+ * refreshed. Shared with the fee terms page.
+ */
+export function useInvalidateFees() {
   const qc = useQueryClient();
   return () =>
     Promise.all(
-      ['portfolio', 'projections', 'works', 'work-curves', 'incc-indices'].map((key) =>
+      ['portfolio', 'projections', 'works', 'work-curves', 'incc-indices', 'fee-terms'].map((key) =>
         qc.invalidateQueries({ queryKey: [key] }),
       ),
     );
