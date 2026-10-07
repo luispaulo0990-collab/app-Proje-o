@@ -114,7 +114,7 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 ## Concluído (07/10/2026 — Curva realizada + tendência)
 
 - Pedido do usuário: até o mês atual a curva da obra vem do **Realizado Acumulado** (mês atual só se tiver avanço); depois, **curva de tendência** combinando o realizado e o **Replanejado Atual Acumulado - Obra** (ex.: ritmo 3%, plano pede 15% → ~10%).
-- Regra: tendência = 0,6 × replanejado + 0,4 × ritmo médio dos últimos 3 meses, até 100% (prolonga no ritmo se o replanejado acabar antes). CALCULATION_RULES §18.
+- Regra: tendência = 0,6 × replanejado + 0,4 × ritmo médio dos últimos 3 meses, distribuída proporcionalmente até o **término do replanejado** (o prazo planejado é mantido). CALCULATION_RULES §18.
 - Recálculo automático quando chega realizado novo ou o mês vira (impressão digital da curva na projeção); “Curvas das obras” marca os meses de tendência.
 - Testes: engine 123 · API 102 · web 7.
 - **A validar com o usuário:** peso 0,6 do replanejado e janela de 3 meses (constantes `TREND_PLAN_WEIGHT`, `TREND_WINDOW_MONTHS`); se devem ser configuráveis por obra.

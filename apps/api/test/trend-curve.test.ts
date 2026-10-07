@@ -85,8 +85,9 @@ describe('curve of a started work = realized + trend', () => {
     });
     expect(put.statusCode).toBe(200);
 
-    // OUT/26 has no realized yet → trend: 0,6 × 15% + 0,4 × 3% = 10,2%; end moves out.
-    expect(await physicalAt('2026-10-01')).toEqual({ value: '0.10200000', months: 19 });
+    // OUT/26 has no realized yet → trend up to the replanned end (MAR/27): 91% spread in
+    // proportion to 0,6 × plan + 0,4 × 3% → 15,02% in OUT/26; still 9 months.
+    expect(await physicalAt('2026-10-01')).toEqual({ value: '0.15019418', months: 9 });
     expect(await physicalAt('2026-09-01')).toMatchObject({ value: '0.03000000' });
 
     const curves = (await inject('GET', '/work-curves')).json();
@@ -94,7 +95,12 @@ describe('curve of a started work = realized + trend', () => {
     expect(item).toMatchObject({
       curveStatus: 'STARTED_ACTUAL',
       needsRecalc: false,
-      trend: { lastRealizedMonth: '2026-09-01', averagePace: '0.03000000', planWeight: '0.60' },
+      trend: {
+        lastRealizedMonth: '2026-09-01',
+        averagePace: '0.03000000',
+        planWeight: '0.60',
+        endMonth: '2027-03-01',
+      },
     });
   });
 

@@ -19,29 +19,19 @@ const REALIZED: RealizedEntry[] = [
 const monthly = (points: { monthlyPct: string }[]) => points.map((p) => p.monthlyPct);
 
 describe('trend curve (realized + trend)', () => {
-  it('blends the plan with the realized pace: plan 15%, pace 3% → 10,2%', () => {
+  it('blends plan and pace and keeps the replanned deadline', () => {
     const t = buildTrendCurve({
       referenceMonth: '2026-03-01',
       replanned: REPLANNED,
       realized: REALIZED,
     });
     expect(t?.startMonth).toBe('2026-01-01');
+    // On schedule (3% a month, as planned): 91% left over ABR..SET in proportion to
+    // 0,6 × plan + 0,4 × 3% (10,2% × 5 · 10,8%; Σ 61,8%) → ≈ the replanned curve, same end.
     const values = monthly(t?.points ?? []);
-    // JAN..MAR = realized; ABR..AGO = 0,6 × 15% + 0,4 × 3%; SET = 0,6 × 16% + 0,4 × 3%.
-    expect(values.slice(0, 9)).toEqual([
-      '0.03000000',
-      '0.03000000',
-      '0.03000000',
-      '0.10200000',
-      '0.10200000',
-      '0.10200000',
-      '0.10200000',
-      '0.10200000',
-      '0.10800000',
-    ]);
-    // 29,2% left after SET at the 3% pace: 9 × 3% + 2,2% → 10 more months (end moves out).
-    expect(values).toHaveLength(19);
-    expect(values.at(-1)).toBe('0.02200000');
+    expect(values).toHaveLength(9);
+    expect(values[3]).toBe('0.15019418'); // 91% × 10,2 ÷ 61,8
+    expect(values[8]).toBe('0.15902913'); // 91% × 10,8 ÷ 61,8
     expect(t?.points.at(-1)?.cumulativePct).toBe('1.00000000');
     expect(t?.info).toEqual({
       lastRealizedMonth: '2026-03-01',
@@ -49,8 +39,33 @@ describe('trend curve (realized + trend)', () => {
       averagePace: '0.03000000',
       windowMonths: 3,
       planWeight: '0.60',
-      extensionMonths: 10,
+      endMonth: '2026-09-01',
     });
+  });
+
+  it('makes a behind-schedule work absorb the backlog up to the deadline, flattened', () => {
+    const t = buildTrendCurve({
+      referenceMonth: '2026-03-01',
+      // Plan: 5% · 5% · 5% then 15% a month and 10% in SET; the work did only 3% a month.
+      replanned: {
+        startMonth: '2026-01-01',
+        points: toPoints(['0.05', '0.05', '0.05', '0.15', '0.15', '0.15', '0.15', '0.15', '0.10']),
+      },
+      realized: REALIZED,
+    });
+    // 91% left; weights 10,2% × 5 and 7,2% (Σ 58,2%) → 15,95% where the plan asks 15% and
+    // 11,26% where it asks 10%: still ends in SET/26.
+    expect(monthly(t?.points ?? [])).toEqual([
+      '0.03000000',
+      '0.03000000',
+      '0.03000000',
+      '0.15948454',
+      '0.15948454',
+      '0.15948454',
+      '0.15948453',
+      '0.15948453',
+      '0.11257732',
+    ]);
   });
 
   it('treats the current month without progress as the first trend month', () => {
@@ -66,7 +81,8 @@ describe('trend curve (realized + trend)', () => {
     });
     for (const t of [withoutProgress, notPublished]) {
       expect(t?.info.lastRealizedMonth).toBe('2026-03-01');
-      expect(t?.points[3]?.monthlyPct).toBe('0.10200000');
+      expect(t?.points).toHaveLength(9);
+      expect(t?.points[2]?.cumulativePct).toBe('0.09000000');
     }
   });
 
@@ -78,19 +94,31 @@ describe('trend curve (realized + trend)', () => {
     });
     expect(t?.info).toMatchObject({ lastRealizedMonth: '2026-04-01', averagePace: '0.04000000' });
     expect(t?.points[3]?.monthlyPct).toBe('0.06000000');
-    // MAI: 0,6 × 15% + 0,4 × 4% (pace of FEV..ABR) = 10,6%
-    expect(t?.points[4]?.monthlyPct).toBe('0.10600000');
+    expect(t?.points.at(-1)?.cumulativePct).toBe('1.00000000');
   });
 
-  it('finishes earlier than the plan when the work is faster', () => {
+  it('spreads the rest up to the deadline even when the work is faster', () => {
     const t = buildTrendCurve({
       referenceMonth: '2026-01-01',
       replanned: { startMonth: '2026-01-01', points: FLAT_4 },
       realized: [{ month: '2026-01-01', realizedCumulative: '0.40' }],
     });
-    // FEV/MAR: 0,6 × 25% + 0,4 × 40% = 31% → the 3rd month only needs the remaining 29%.
-    expect(monthly(t?.points ?? [])).toEqual(['0.40000000', '0.31000000', '0.29000000']);
-    expect(t?.info.extensionMonths).toBe(0);
+    expect(monthly(t?.points ?? [])).toEqual([
+      '0.40000000',
+      '0.20000000',
+      '0.20000000',
+      '0.20000000',
+    ]);
+  });
+
+  it('puts the rest in the next month when the deadline has already passed', () => {
+    const t = buildTrendCurve({
+      referenceMonth: '2026-06-01',
+      replanned: { startMonth: '2026-01-01', points: FLAT_4 },
+      realized: [{ month: '2026-04-01', realizedCumulative: '0.80' }],
+    });
+    expect(monthly(t?.points ?? []).slice(-2)).toEqual(['0.80000000', '0.20000000']);
+    expect(t?.issues.map((i) => i.code)).toContain('TREND_PAST_DEADLINE');
   });
 
   it('never produces a negative month when the realized is corrected downwards', () => {
@@ -124,7 +152,7 @@ describe('resolveEffectiveCurve with realized progress', () => {
     expect(e).toMatchObject({
       source: 'WORK_ACTUAL',
       status: 'STARTED_ACTUAL',
-      durationMonths: 19,
+      durationMonths: 9,
     });
     expect(e.trend?.lastRealizedMonth).toBe('2026-03-01');
   });

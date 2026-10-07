@@ -115,8 +115,8 @@ export const trendInfoDto = z.object({
   windowMonths: z.number().int(),
   /** Weight of the replanned curve in each trend month (rest = realized pace). */
   planWeight: z.string(),
-  /** Months added after the replanned curve to reach 100%. */
-  extensionMonths: z.number().int(),
+  /** Last trend month = end of the replanned curve (the planned deadline is kept). */
+  endMonth: z.string(),
 });
 export type TrendInfoDto = z.infer<typeof trendInfoDto>;
 

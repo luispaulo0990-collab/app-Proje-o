@@ -1,5 +1,15 @@
-import { normalizeCurveWeights, MAX_CURVE_POINTS } from './curve.js';
-import { Decimal, ONE, PCT_SCALE, ZERO, roundTo, toDecimal, toFixedString } from './decimal.js';
+import { allocateLargestRemainder } from './allocation.js';
+import { normalizeCurveWeights } from './curve.js';
+import {
+  Decimal,
+  ONE,
+  PCT_SCALE,
+  ZERO,
+  roundTo,
+  sum,
+  toDecimal,
+  toFixedString,
+} from './decimal.js';
 import { issue } from './errors.js';
 import { addMonths, parseIsoMonth, toIsoMonth } from './schedule.js';
 import type {
@@ -44,8 +54,8 @@ export interface TrendInfo {
   averagePace: DecimalString;
   windowMonths: number;
   planWeight: DecimalString;
-  /** Months after the replanned curve that were needed to reach 100%. */
-  extensionMonths: number;
+  /** Last month of the trend = end of the replanned curve (planned deadline kept). */
+  endMonth: IsoMonth;
 }
 
 export interface TrendCurve {
@@ -110,8 +120,10 @@ function realizedCumulative(
  * 2. From the next month on, each month is a blend of what the replanned curve asks and what the
  *    work has been doing: `trend = w × replanned(month) + (1 − w) × pace`, where pace = average
  *    realized monthly progress of the last N months (w = TREND_PLAN_WEIGHT, N = TREND_WINDOW_MONTHS).
- * 3. The trend stops when the work reaches 100%. If the replanned curve ends first, the work keeps
- *    its pace (or its overall average, if larger) until 100% — the end date moves out.
+ * 3. The trend respects the end of the replanned curve: what is left to reach 100% is spread over
+ *    the months up to that deadline in proportion to the blend above (rule refined 07/10/2026).
+ *    A behind-schedule work therefore keeps the deadline and has to absorb the backlog; the blend
+ *    only flattens how it is absorbed (less in the plan's peaks, more in its smaller months).
  *
  * Returns null when there is no realized progress yet (the replanned curve is used as is).
  */
@@ -148,8 +160,7 @@ export function buildTrendCurve(input: TrendCurveInput): TrendCurve | null {
     monthly.push(cumulativeAt(m).minus(cumulativeAt(shift(m, -1))));
   }
   const done = cumulativeAt(last);
-  const realizedMonths = monthly.length;
-  let remaining = ONE.minus(done);
+  const remaining = ONE.minus(done);
 
   // 2. Recent pace: average monthly progress over the window (or since the start, if shorter).
   const windowLength = Math.min(window, monthly.length);
@@ -158,37 +169,30 @@ export function buildTrendCurve(input: TrendCurveInput): TrendCurve | null {
     PCT_SCALE,
   );
 
-  const take = (value: Decimal) => {
-    const amount = Decimal.min(value, remaining);
-    monthly.push(amount);
-    remaining = remaining.minus(amount);
-  };
-  const plannedAhead = [...replanned].filter(([m]) => m > last).map(([, v]) => v);
-  for (const planned of plannedAhead) {
-    if (!remaining.greaterThan(0)) break;
-    take(roundTo(weight.times(planned).plus(ONE.minus(weight).times(pace)), PCT_SCALE));
-  }
-
-  // 3. Replanned curve over and the work not finished: it keeps its recent pace (or its overall
-  //    average since the start, if larger — a stalled work still converges) until 100%.
-  const overall = roundTo(done.div(realizedMonths), PCT_SCALE);
-  const extensionPace = Decimal.max(pace, overall);
-  let extensionMonths = 0;
-  while (remaining.greaterThan(0) && monthly.length < MAX_CURVE_POINTS) {
-    take(extensionPace);
-    extensionMonths += 1;
-  }
-  if (remaining.greaterThan(0)) {
-    const lastIndex = monthly.length - 1;
-    monthly[lastIndex] = (monthly[lastIndex] ?? ZERO).plus(remaining);
+  // 3. Trend months = from the month after the last realized one up to the END OF THE REPLANNED
+  //    CURVE (the planned deadline is kept). Each month weighs `w × replanned + (1 − w) × pace`
+  //    and what is left to reach 100% is spread over them in that proportion.
+  const replannedEnd = shift(replannedStart, input.replanned.points.length - 1);
+  const trendMonths: IsoMonth[] = [];
+  for (let m = shift(last, 1); m <= replannedEnd; m = shift(m, 1)) trendMonths.push(m);
+  const blend = trendMonths.map((m) =>
+    weight.times(replanned.get(m) ?? ZERO).plus(ONE.minus(weight).times(pace)),
+  );
+  if (remaining.greaterThan(0) && trendMonths.length === 0) {
+    // Deadline already passed and the work is not finished: the rest falls in the next month.
+    monthly.push(remaining);
     issues.push(
       issue(
-        'TREND_TOO_LONG',
-        `A tendência passaria de ${MAX_CURVE_POINTS} meses; o saldo foi concentrado no último mês.`,
-        {},
+        'TREND_PAST_DEADLINE',
+        `O prazo do replanejado (${replannedEnd.slice(0, 7)}) já passou e a obra não chegou a 100%: o saldo foi lançado no mês seguinte ao último realizado.`,
+        { month: replannedEnd },
         'WARNING',
       ),
     );
+  } else if (remaining.greaterThan(0)) {
+    // No weight at all (plan over and pace 0) → spread evenly.
+    const weights = sum(blend).isZero() ? blend.map(() => ONE) : blend;
+    monthly.push(...allocateLargestRemainder(weights, remaining, PCT_SCALE));
   }
 
   // Trailing months without progress (e.g. realized ≥ 100% before the window) are dropped.
@@ -203,7 +207,7 @@ export function buildTrendCurve(input: TrendCurveInput): TrendCurve | null {
       averagePace: toFixedString(pace, PCT_SCALE),
       windowMonths: windowLength,
       planWeight: toFixedString(weight, 2),
-      extensionMonths,
+      endMonth: replannedEnd,
     },
     issues,
   };
