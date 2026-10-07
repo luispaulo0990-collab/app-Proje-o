@@ -132,7 +132,7 @@ describe('actual curve of a started work', () => {
     expect((await putActual(workId, { source: 'ERP' })).statusCode).toBe(400);
   });
 
-  it('only flags the projection when manual adjustments exist', async () => {
+  it('applies the own curve around the manual adjustments, anchored to their month', async () => {
     const workId = await createWork({});
     await ctx.app.inject({
       method: 'PUT',
@@ -141,21 +141,12 @@ describe('actual curve of a started work', () => {
       payload: { changes: [{ series: 'PHYSICAL', periodIndex: 2, value: '0.05' }] },
     });
     const res = await putActual(workId, { source: 'ERP', points: OWN_10 });
-    expect(res.json().projection.outcome).toBe('MARKED_STALE');
+    expect(res.json().projection.outcome).toBe('RECALCULATED');
     const proj = (
       await ctx.app.inject({ url: `/api/v1/projections/${workId}`, headers: auth(admin) })
     ).json();
-    expect(proj).toMatchObject({ isStale: true, curveSource: 'PARAMETRIC' });
-
-    // Recalculating keeps the manual cell anchored to its month on the own curve.
-    const recalc = await ctx.app.inject({
-      method: 'POST',
-      url: `/api/v1/projections/${workId}/calculate`,
-      headers: auth(admin),
-      payload: { mode: 'PRESERVE_MANUAL' },
-    });
-    expect(recalc.json()).toMatchObject({ curveSource: 'WORK_ACTUAL', manualCount: 1 });
-    expect(recalc.json().physical[1]).toMatchObject({ origin: 'MANUAL', current: '0.05000000' });
+    expect(proj).toMatchObject({ isStale: false, curveSource: 'WORK_ACTUAL', manualCount: 1 });
+    expect(proj.physical[1]).toMatchObject({ origin: 'MANUAL', current: '0.05000000' });
   });
 });
 

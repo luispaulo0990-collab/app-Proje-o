@@ -34,9 +34,8 @@ import type { Actor, AppDeps } from '../../types.js';
 import { currentMonth, toMonth } from '../../utils/dates.js';
 import { notFound } from '../../utils/errors.js';
 import {
-  generateProjection,
-  manualFromValues,
   projectionNeedsRecalc,
+  regenerateOrFlagStale,
   resolveWorkCurve,
 } from '../projections/projections.service.js';
 
@@ -106,8 +105,8 @@ export function createWorkCurvesService({ db }: AppDeps) {
   }
 
   /**
-   * Brings the projection in line with the curve in force. Manual adjustments are never
-   * overwritten silently (spec §15): with manual cells the projection is only flagged stale.
+   * Brings the projection in line with the curve in force, preserving manual cells (see
+   * regenerateOrFlagStale): only a manual cell that no longer fits flags the projection stale.
    */
   async function applyCurveInForce(
     tx: Db,
@@ -115,37 +114,9 @@ export function createWorkCurvesService({ db }: AppDeps) {
     actor: Actor,
     reason: string,
   ): Promise<{ outcome: Outcome; version: number | null }> {
-    const current = await projectionsRepository.findCurrent(tx, work.id);
-    const values = current ? await projectionsRepository.getValues(tx, current.projection.id) : [];
-    const audit = actorAudit(actor);
-    if (manualFromValues(values).length > 0) {
-      await projectionsRepository.markStale(tx, work.id);
-      await auditRepository.insert(tx, {
-        userId: audit.userId,
-        action: 'PROJECTION_STALE',
-        entity: 'projection',
-        entityId: current?.projection.id ?? null,
-        workId: work.id,
-        metadata: { reason, integration: audit.integration },
-      });
-      return { outcome: 'MARKED_STALE', version: current?.projection.version ?? null };
-    }
-    const { row } = await generateProjection(tx, work, actor.user, {
-      mode: 'REPLACE_MANUAL',
-      manualCells: [],
-      note: reason,
-    });
-    await auditRepository.insert(tx, {
-      userId: audit.userId,
-      action: 'RECALCULATE',
-      entity: 'projection',
-      entityId: row.id,
-      workId: work.id,
-      newValue: `V${row.version}`,
-      origin: 'CURVE',
-      metadata: { automatic: true, curveSource: row.curveSource, integration: audit.integration },
-    });
-    return { outcome: 'RECALCULATED', version: row.version };
+    const { outcome, row } = await regenerateOrFlagStale(tx, work, actor, reason);
+    const current = row ?? (await projectionsRepository.findCurrent(tx, work.id))?.projection;
+    return { outcome, version: current?.version ?? null };
   }
 
   return {

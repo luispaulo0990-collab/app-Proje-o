@@ -1,6 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FeeIssuanceBody, InccIndexBody } from '@unita/contracts';
-import { feesApi, portfolioApi, type PortfolioFilters } from '@/services/api/endpoints';
+import {
+  feesApi,
+  portfolioApi,
+  projectionsApi,
+  type PortfolioFilters,
+} from '@/services/api/endpoints';
 
 export const portfolioKeys = {
   consolidated: (f: PortfolioFilters) => ['portfolio', 'consolidated', f] as const,
@@ -68,4 +73,28 @@ export function useSetIncc() {
 export function useDeleteIncc() {
   const onSuccess = useInvalidateFees();
   return useMutation({ mutationFn: feesApi.deleteIncc, onSuccess });
+}
+
+/**
+ * Manual fee projection typed in the Consolidado (`value: null` = back to the curve). The engine
+ * keeps every manual month and recalculates the others; all views are refreshed.
+ */
+export function useSetFeeProjection() {
+  const onSuccess = useInvalidateFees();
+  return useMutation({
+    mutationFn: ({
+      workId,
+      periodIndex,
+      value,
+    }: {
+      workId: string;
+      periodIndex: number;
+      value: string | null;
+    }) =>
+      projectionsApi.update(workId, {
+        changes: [{ series: 'FEE', periodIndex, value }],
+        note: 'Projeção de taxa no Consolidado',
+      }),
+    onSuccess,
+  });
 }

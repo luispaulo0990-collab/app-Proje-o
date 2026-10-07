@@ -302,7 +302,7 @@ describe('works + projections', () => {
     expect(list.json().items.map((w: { id: string }) => w.id)).toContain(work.id);
   });
 
-  it('changing calc inputs regenerates automatically without manual cells, flags stale with them', async () => {
+  it('changing calc inputs regenerates automatically, keeping manual cells that still fit', async () => {
     const work = await createWork();
     const put = (patch: Record<string, unknown>) =>
       ctx.app.inject({
@@ -311,21 +311,31 @@ describe('works + projections', () => {
         headers: auth(admin),
         payload: workPayload(curveVersionId, patch),
       });
+    const edit = (changes: object[]) =>
+      ctx.app.inject({
+        method: 'PUT',
+        url: `/api/v1/projections/${work.id}`,
+        headers: auth(admin),
+        payload: { changes },
+      });
 
     expect((await put({ budget: '50000000.00' })).json().feeTotal).toBe('4500000.00');
     let p = await getProjection(work.id);
     expect(p).toMatchObject({ version: 2, isStale: false, totals: { fee: '4500000.00' } });
 
-    await ctx.app.inject({
-      method: 'PUT',
-      url: `/api/v1/projections/${work.id}`,
-      headers: auth(admin),
-      payload: { changes: [{ series: 'PHYSICAL', periodIndex: 2, value: '0.02' }] },
-    });
+    // With a manual cell: regenerated around it (no "review" lock).
+    await edit([{ series: 'PHYSICAL', periodIndex: 2, value: '0.02' }]);
     const updated = (await put({ budget: '50000000.00', durationMonths: 24 })).json();
     expect(updated.endDate).toBe('2028-12-31');
     p = await getProjection(work.id);
-    expect(p).toMatchObject({ version: 3, isStale: true });
+    expect(p).toMatchObject({ version: 4, isStale: false });
+    expect(p.physical[1]).toMatchObject({ current: '0.02000000', origin: 'MANUAL' });
+
+    // A manual cell that would fall outside the new schedule: kept as is, flagged for review.
+    await edit([{ series: 'PHYSICAL', periodIndex: 24, value: '0.01' }]);
+    await put({ budget: '50000000.00', durationMonths: 20 });
+    p = await getProjection(work.id);
+    expect(p).toMatchObject({ version: 5, isStale: true });
   });
 
   it('delete is blocked after manual adjustments; archive and duplicate work', async () => {

@@ -3,10 +3,7 @@ import type { WorkBody, WorkDto, WorkListQuery } from '@unita/contracts';
 import type { Db } from '../../database/client.js';
 import { auditRepository, type AuditEntry } from '../../database/repositories/audit.repository.js';
 import { curvesRepository } from '../../database/repositories/curves.repository.js';
-import {
-  projectionsRepository,
-  workHasManualHistory,
-} from '../../database/repositories/projections.repository.js';
+import { workHasManualHistory } from '../../database/repositories/projections.repository.js';
 import {
   clientsRepository,
   worksRepository,
@@ -15,7 +12,7 @@ import {
 } from '../../database/repositories/works.repository.js';
 import type { AppDeps, AuthUser } from '../../types.js';
 import { AppError, conflict, notFound } from '../../utils/errors.js';
-import { generateProjection } from '../projections/projections.service.js';
+import { generateProjection, regenerateOrFlagStale } from '../projections/projections.service.js';
 
 /** Fields that feed the ProjectionEngine — changing any of them affects the projection. */
 const CALC_FIELDS = [
@@ -127,9 +124,9 @@ export function createWorksService({ db }: AppDeps) {
     },
 
     /**
-     * Updates the work. If a calculation input changed: without manual cells the projection is
-     * regenerated automatically; with manual cells it is flagged stale and the user must choose
-     * (preserve or replace) — manual values are never overwritten silently (spec §15).
+     * Updates the work. If a calculation input changed the projection is regenerated keeping the
+     * manual cells; only when one of them no longer fits is it flagged stale for the user to
+     * choose (preserve or replace) — manual values are never lost silently (spec §15).
      */
     async update(id: string, input: WorkBody, user: AuthUser): Promise<WorkDto> {
       await db.transaction(async (tx) => {
@@ -169,39 +166,15 @@ export function createWorksService({ db }: AppDeps) {
           });
         }
 
-        if (changed.some((f) => (CALC_FIELDS as readonly string[]).includes(f))) {
-          const current = await projectionsRepository.findCurrent(tx, id);
-          const values = current
-            ? await projectionsRepository.getValues(tx, current.projection.id)
-            : [];
-          if (values.some((v) => v.origin === 'MANUAL')) {
-            await projectionsRepository.markStale(tx, id);
-            entries.push({
-              userId: user.id,
-              action: 'PROJECTION_STALE',
-              entity: 'projection',
-              entityId: current?.projection.id ?? null,
-              workId: id,
-            });
-          } else {
-            const { row } = await generateProjection(tx, after, user, {
-              mode: 'REPLACE_MANUAL',
-              manualCells: [],
-              note: 'Recalculada após alteração da obra',
-            });
-            entries.push({
-              userId: user.id,
-              action: 'RECALCULATE',
-              entity: 'projection',
-              entityId: row.id,
-              workId: id,
-              newValue: `V${row.version}`,
-              origin: 'CURVE',
-              metadata: { automatic: true },
-            });
-          }
-        }
         await auditRepository.insert(tx, entries);
+        if (changed.some((f) => (CALC_FIELDS as readonly string[]).includes(f))) {
+          await regenerateOrFlagStale(
+            tx,
+            after,
+            { user, integration: null },
+            'Recalculada após alteração da obra',
+          );
+        }
       });
       return get(id);
     },

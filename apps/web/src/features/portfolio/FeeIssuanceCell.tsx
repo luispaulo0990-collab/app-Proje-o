@@ -1,19 +1,12 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useState } from 'react';
 import type { ConsolidatedWorkDto } from '@unita/contracts';
 import { addMonthsIso } from '@unita/engine';
+import { InlineMoneyInput } from '@/components/forms/InlineMoneyInput';
 import { ConfirmDialog } from '@/components/ui';
 import { errorMessage } from '@/services/api/client';
 import { cn } from '@/utils/cn';
-import {
-  decimalToInput,
-  formatCurrency,
-  formatDateTime,
-  formatMonth,
-  parseMoneyInput,
-} from '@/utils/format';
+import { formatCurrency, formatDateTime, formatMonth } from '@/utils/format';
 import { useDeleteFeeIssuance, useSetFeeIssuance } from './hooks';
-
-const MONEY = /^\d+(\.\d{1,2})?$/;
 
 /**
  * "Taxa emitida": the fee invoiced for the work in the reference month (competência M−1 — it
@@ -31,9 +24,7 @@ export function FeeIssuanceCell({
 }) {
   const issuance = work.feeIssuance;
   const editable = canEdit && work.acceptsIssuance;
-  const [draft, setDraft] = useState<string | null>(null);
-  // Escape closes the editor without saving even if the browser fires blur afterwards.
-  const discard = useRef(false);
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const save = useSetFeeIssuance();
@@ -42,55 +33,28 @@ export function FeeIssuanceCell({
 
   const startEdit = () => {
     if (!editable || save.isPending) return;
-    discard.current = false;
     setError(null);
-    setDraft(issuance ? decimalToInput(issuance.amount) : '');
+    setEditing(true);
   };
 
-  const close = () => {
-    setDraft(null);
-    setError(null);
-  };
-
-  /** Single save path: the input's blur (Enter blurs it; Escape discards first). */
-  const commit = () => {
-    if (draft === null) return;
-    if (discard.current || draft.trim() === '') return close();
-    const amount = parseMoneyInput(draft);
-    if (amount === null || !MONEY.test(amount)) {
-      setError('Informe um valor em R$ (até 2 casas).');
-      return;
-    }
-    setDraft(null);
-    if (issuance && Number(issuance.amount) === Number(amount)) return;
+  /** Empty field = nothing to save (removal goes through the × button). */
+  const commit = (amount: string | null) => {
+    setEditing(false);
+    if (amount === null) return;
     save.mutate({ ...target, body: { amount } }, { onError: (e) => setError(errorMessage(e)) });
-  };
-
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.currentTarget.blur();
-    } else if (e.key === 'Escape') {
-      discard.current = true;
-      e.currentTarget.blur();
-    }
   };
 
   const competence = formatMonth(addMonthsIso(referenceMonth, -1));
 
   return (
     <div className="min-w-44">
-      {draft !== null ? (
-        <input
-          autoFocus
-          inputMode="decimal"
-          aria-label={`Taxa emitida em ${formatMonth(referenceMonth)} — ${work.name}`}
-          placeholder={decimalToInput(work.feeAtReference)}
-          className="h-8 w-full rounded-control border border-primary bg-surface px-2 text-right text-sm tabular focus:outline-none focus:ring-2 focus:ring-primary/20"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onKeyDown}
-          onBlur={commit}
+      {editing ? (
+        <InlineMoneyInput
+          initial={issuance?.amount ?? null}
+          placeholder={formatCurrency(work.feeAtReference)}
+          ariaLabel={`Taxa emitida em ${formatMonth(referenceMonth)} — ${work.name}`}
+          onCommit={commit}
+          onCancel={() => setEditing(false)}
         />
       ) : (
         <button

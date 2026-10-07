@@ -29,7 +29,12 @@ import {
 } from '../projections/projections.service.js';
 
 const toCells = (cells: readonly ProjectionCell[]) =>
-  cells.map((c) => ({ month: c.month, value: c.current, origin: c.origin }));
+  cells.map((c) => ({
+    periodIndex: c.periodIndex,
+    month: c.month,
+    value: c.current,
+    origin: c.origin,
+  }));
 
 export function createPortfolioService({ db }: AppDeps) {
   return {

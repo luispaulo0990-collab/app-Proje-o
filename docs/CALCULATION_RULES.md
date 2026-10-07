@@ -283,3 +283,12 @@ Definido em 07/10/2026. Motor 0.5.0 (`packages/engine/src/trend-curve.ts`, `buil
 **Recálculo** — cada projeção guarda a impressão digital da curva usada (`curveFingerprint`) e o resumo (`trend`). Chegou realizado novo (`PUT /works/:id/progress-indicators` ou importação do SharePoint) → a projeção é regenerada; com ajustes manuais, fica marcada como desatualizada (§8). A importação diária (cron) termina sincronizando todas as obras, então a virada do mês também é absorvida.
 
 **Tela** — em “Curvas das obras”, os meses de tendência aparecem em _itálico azul_ e a obra mostra “Tendência · ritmo X%/mês”.
+
+## 19. Projeção manual da taxa no Consolidado e recálculo dinâmico
+
+Definido em 07/10/2026.
+
+- **Edição no Consolidado:** na linha “Taxa (R$)” de cada obra, o editor clica no mês e digita o valor projetado (Enter salva, Esc cancela). Grava um ajuste manual de taxa (`PUT /projections/:workId`, `series = FEE`) — mesma regra da §8: os meses digitados são mantidos e o saldo é redistribuído nos demais meses pelos pesos da curva, com fechamento exato. Esvaziar um mês manual o devolve à curva. Meses com taxa emitida não são editáveis ali (use “Taxa emitida no mês”).
+- **Vários meses:** cada mês digitado (ex.: o mês que vem e 3 meses à frente) continua manual até ser apagado; só os outros meses são recalculados.
+- **Recálculo dinâmico (muda a §8):** qualquer alteração de entrada — cadastro da obra, curva própria/tendência (§11, §18), taxa emitida, INCC, vigências (§17) — gera nova versão **preservando** os ajustes manuais, e todas as telas são atualizadas. A projeção só fica “Revisar ajustes” (escolher preservar/substituir) quando algum ajuste manual não cabe mais: cai fora do novo cronograma ou ultrapassa o total (`regenerateOrFlagStale`).
+- Sem taxa emitida, o saldo é redistribuído em todos os meses não manuais, inclusive meses passados (são projeção até haver emissão). Com taxa emitida, só os meses depois da última emissão absorvem a diferença (§15).

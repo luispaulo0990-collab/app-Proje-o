@@ -1,4 +1,5 @@
 import {
+  EngineValidationError,
   FEE_COMPETENCE_LAG_MONTHS,
   calculateProjection,
   computeKpis,
@@ -326,6 +327,65 @@ export async function regenerateKeepingManualCells(
     metadata: { integration: actor.integration },
   });
   return { row, result };
+}
+
+/** Thrown inside a savepoint to undo a regeneration that would lose manual cells. */
+class ManualCellsWouldBeLost extends Error {}
+
+/**
+ * Automatic recalculation after any input change (curve/trend, work parameters…), keeping the
+ * projection dynamic: the manual cells are preserved and everything else is recalculated around
+ * them. Only when some manual cell no longer fits (outside the new schedule, or above the total)
+ * is the projection left as it is and flagged for review — manual values are never lost silently.
+ */
+export async function regenerateOrFlagStale(
+  tx: Db,
+  work: WorkRow,
+  actor: Actor,
+  note: string,
+): Promise<{ outcome: 'RECALCULATED' | 'MARKED_STALE'; row: ProjectionRow | null }> {
+  const current = await projectionsRepository.findCurrent(tx, work.id);
+  const values = current ? await projectionsRepository.getValues(tx, current.projection.id) : [];
+  const manualCells = manualFromValues(values);
+  try {
+    const row = await tx.transaction(async (savepoint) => {
+      const generated = await generateProjection(savepoint, work, actor.user, {
+        mode: 'PRESERVE_MANUAL',
+        manualCells,
+        note,
+      });
+      if (generated.dropped > 0) throw new ManualCellsWouldBeLost();
+      return generated.row;
+    });
+    await auditRepository.insert(tx, {
+      userId: actor.user?.id ?? null,
+      action: 'RECALCULATE',
+      entity: 'projection',
+      entityId: row.id,
+      workId: work.id,
+      field: note.slice(0, 80),
+      newValue: `V${row.version}`,
+      origin: 'CURVE',
+      metadata: {
+        automatic: true,
+        manualCells: manualCells.length,
+        integration: actor.integration,
+      },
+    });
+    return { outcome: 'RECALCULATED', row };
+  } catch (err) {
+    if (!(err instanceof ManualCellsWouldBeLost || err instanceof EngineValidationError)) throw err;
+    await projectionsRepository.markStale(tx, work.id);
+    await auditRepository.insert(tx, {
+      userId: actor.user?.id ?? null,
+      action: 'PROJECTION_STALE',
+      entity: 'projection',
+      entityId: current?.projection.id ?? null,
+      workId: work.id,
+      metadata: { reason: note, integration: actor.integration },
+    });
+    return { outcome: 'MARKED_STALE', row: null };
+  }
 }
 
 function integrationLabel(metadata: unknown): string | null {

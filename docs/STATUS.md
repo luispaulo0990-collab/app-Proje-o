@@ -119,6 +119,14 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 - Testes: engine 123 · API 102 · web 7.
 - **A validar com o usuário:** peso 0,6 do replanejado e janela de 3 meses (constantes `TREND_PLAN_WEIGHT`, `TREND_WINDOW_MONTHS`); se devem ser configuráveis por obra.
 
+## Concluído (07/10/2026 — Projeção manual da taxa no Consolidado)
+
+- Pedido do usuário: projetar a taxa manualmente no Consolidado, com tudo se recalculando em todas as abas, mantendo vários meses manuais (ex.: mês que vem e 3 meses à frente).
+- Web: células da linha “Taxa (R$)” editáveis (`FeeProjectionCell`); edição inline reaproveitada da taxa emitida (`InlineMoneyInput`).
+- API: `regenerateOrFlagStale` — recálculos automáticos preservam os ajustes manuais (antes marcavam a projeção como desatualizada); só marcam quando um ajuste não cabe mais. Células do Consolidado trazem `periodIndex`. CALCULATION_RULES §19.
+- Testes: engine 125 · API 105 · web 7.
+- **A decidir com o usuário:** se meses passados sem taxa emitida devem ficar fixos (hoje também absorvem a redistribuição).
+
 ## Próximos passos
 
 1. **Fase 6** — grade editável estilo Excel (TanStack Table + virtualização): edição de célula, Enter/Tab/setas, copiar/colar, seleção múltipla, marcação manual, salvar em lote (PUT /projections/:workId já existe); visão de carteira já existe (Consolidado, somente leitura); falta virtualizar para centenas de obras.

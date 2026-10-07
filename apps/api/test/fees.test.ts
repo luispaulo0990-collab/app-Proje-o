@@ -127,20 +127,21 @@ describe('PUT/DELETE /works/:id/fee-issuances/:month (taxa emitida)', () => {
   });
 
   it('keeps a pending "preserve or replace" decision pending', async () => {
+    // A manual cell that no longer fits (outside a shorter schedule) flags the projection.
     await inject('PUT', `/projections/${workId}`, {
-      changes: [{ series: 'PHYSICAL', periodIndex: 5, value: '0.05' }],
+      changes: [{ series: 'PHYSICAL', periodIndex: 22, value: '0.05' }],
     });
     const work = (await inject('GET', `/works/${workId}`)).json();
     const changed = await inject('PUT', `/works/${workId}`, {
       name: work.name,
       clientName: work.client.name,
       units: work.units,
-      budget: '2000000.00',
+      budget: work.budget,
       feeRate: work.feeRate,
       constructionSystem: work.constructionSystem,
       curveVersionId: work.curve.versionId,
       startDate: work.startDate,
-      durationMonths: work.durationMonths,
+      durationMonths: 20,
       status: work.status,
     });
     expect(changed.statusCode).toBe(200);

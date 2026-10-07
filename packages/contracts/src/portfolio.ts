@@ -11,7 +11,13 @@ export const consolidatedQuery = referenceQuery.extend({
 });
 export type ConsolidatedQuery = z.infer<typeof consolidatedQuery>;
 
-const cell = z.object({ month: z.string(), value: z.string(), origin: cellOriginSchema });
+/** One month of a series; `periodIndex` addresses the cell in PUT /projections/:workId. */
+const cell = z.object({
+  periodIndex: z.number().int(),
+  month: z.string(),
+  value: z.string(),
+  origin: cellOriginSchema,
+});
 
 export const clientStatusSchema = z.enum(['OK', 'ATRASADA', 'SEM_DADOS']);
 export type ClientStatus = z.infer<typeof clientStatusSchema>;

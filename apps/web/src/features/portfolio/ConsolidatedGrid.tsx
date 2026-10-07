@@ -1,13 +1,16 @@
-import { memo, useMemo, type ReactNode, type RefObject } from 'react';
+import { memo, useMemo, useState, type ReactNode, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import type { ConsolidatedDto, ConsolidatedWorkDto } from '@unita/contracts';
 import { Badge } from '@/components/ui';
 import { CELL_ORIGIN } from '@/features/projections/cellOrigin';
 import { CURVE_SOURCE } from '@/features/work-curves/curveStatus';
+import { errorMessage } from '@/services/api/client';
 import { cn } from '@/utils/cn';
 import { formatCurrency, formatMonth, formatNumber, formatPercent } from '@/utils/format';
 import { ClientStatus, EconomicIndex, Progress, sub } from './ConsolidatedCells';
 import { FeeIssuanceCell } from './FeeIssuanceCell';
+import { FeeProjectionCell } from './FeeProjectionCell';
+import { useSetFeeProjection } from './hooks';
 
 type Month = ConsolidatedDto['months'][number];
 type Totals = ConsolidatedDto['totals'];
@@ -272,6 +275,18 @@ const WorkRows = memo(function WorkRows({
   referenceMonth: string;
   canEdit: boolean;
 }) {
+  const [editingMonth, setEditingMonth] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveFee = useSetFeeProjection();
+  const savingMonth = saveFee.isPending ? (saveFee.variables?.periodIndex ?? null) : null;
+  const commitFee = (periodIndex: number, value: string | null) => {
+    setEditingMonth(null);
+    setSaveError(null);
+    saveFee.mutate(
+      { workId: work.workId, periodIndex, value },
+      { onError: (err) => setSaveError(errorMessage(err)) },
+    );
+  };
   const physical = useMemo(() => new Map(work.physical.map((c) => [c.month, c])), [work.physical]);
   const fee = useMemo(() => new Map(work.fee.map((c) => [c.month, c])), [work.fee]);
   const series = [
@@ -309,6 +324,11 @@ const WorkRows = memo(function WorkRows({
                     <Badge tone="warning">{work.isStale ? 'Revisar ajustes' : 'Recalcular'}</Badge>
                   )}
                 </div>
+                {saveError && (
+                  <p className="mt-1 text-[11px] leading-4 text-error" role="alert">
+                    {saveError}
+                  </p>
+                )}
               </td>
             </>
           )}
@@ -350,7 +370,22 @@ const WorkRows = memo(function WorkRows({
                   m.isReference && !origin && 'bg-cell-current-period/60',
                 )}
               >
-                {cell && !ZERO.test(cell.value) ? s.format(cell.value) : ''}
+                {s.key === 'fee' && cell ? (
+                  <FeeProjectionCell
+                    cell={cell}
+                    workName={work.name}
+                    canEdit={canEdit}
+                    editing={editingMonth === cell.month}
+                    saving={savingMonth === cell.periodIndex}
+                    onStartEdit={() => setEditingMonth(cell.month)}
+                    onCommit={(value) => commitFee(cell.periodIndex, value)}
+                    onCancel={() => setEditingMonth(null)}
+                  />
+                ) : cell && !ZERO.test(cell.value) ? (
+                  s.format(cell.value)
+                ) : (
+                  ''
+                )}
               </td>
             );
           })}
