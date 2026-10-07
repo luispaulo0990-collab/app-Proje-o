@@ -19,7 +19,11 @@ import { authRoutes } from './modules/auth/auth.routes.js';
 import { JwtService } from './modules/auth/jwt.js';
 import { createSupabaseAuthClient, type SupabaseAuthClient } from './modules/auth/supabase-auth.js';
 import { curvesRoutes } from './modules/curves/curves.routes.js';
-import { feeIssuancesRoutes, inccIndicesRoutes } from './modules/fees/fees.routes.js';
+import {
+  feeIssuancesRoutes,
+  feeTermsRoutes,
+  inccIndicesRoutes,
+} from './modules/fees/fees.routes.js';
 import { integrationsRoutes } from './modules/integrations/integrations.routes.js';
 import { consolidatedInputsRoutes } from './modules/portfolio/consolidated-inputs.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
@@ -169,6 +173,7 @@ export async function buildApp({
       await v1.register(actualCurveRoutes, { prefix: '/works' });
       await v1.register(consolidatedInputsRoutes, { prefix: '/works' });
       await v1.register(feeIssuancesRoutes, { prefix: '/works' });
+      await v1.register(feeTermsRoutes, { prefix: '/works' });
       await v1.register(inccIndicesRoutes, { prefix: '/incc-indices' });
       await v1.register(workCurvesRoutes, { prefix: '/work-curves' });
       await v1.register(portfolioRoutes, { prefix: '/portfolio' });

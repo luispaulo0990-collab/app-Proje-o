@@ -44,6 +44,14 @@ export const seriesEnum = pgEnum('projection_series', ['PHYSICAL', 'FEE']);
 export const originEnum = pgEnum('cell_origin', ['CURVE', 'MANUAL', 'ISSUED']);
 export const curveSourceEnum = pgEnum('curve_source', ['PARAMETRIC', 'WORK_ACTUAL']);
 export const receivedViaEnum = pgEnum('received_via', ['USER', 'API_KEY']);
+/** How often the fee balance is corrected by the INCC (see engine INCC_PERIOD_MONTHS). */
+export const inccPeriodicityEnum = pgEnum('incc_periodicity', [
+  'MONTHLY',
+  'QUARTERLY',
+  'FOUR_MONTHLY',
+  'SEMIANNUAL',
+  'ANNUAL',
+]);
 
 // ─── Identity ──────────────────────────────────────────────────────────────
 export const users = pgTable(
@@ -171,6 +179,10 @@ export const works = pgTable(
     units: integer('units').notNull(),
     budget: money('budget').notNull(),
     feeRate: fraction('fee_rate').notNull(),
+    /** INCC correction until the first fee term ("vigência"). */
+    inccPeriodicity: inccPeriodicityEnum('incc_periodicity').notNull().default('MONTHLY'),
+    /** "Data-base" of the INCC cycle; null = start month of the work. */
+    inccBaseMonth: date('incc_base_month', { mode: 'string' }),
     constructionSystem: varchar('construction_system', { length: 120 }).notNull(),
     curveVersionId: uuid('curve_version_id')
       .notNull()
@@ -330,6 +342,30 @@ export const feeIssuances = pgTable(
     primaryKey({ columns: [t.workId, t.month] }),
     check('fee_issuances_amount_chk', sql`${t.amount} >= 0`),
     check('fee_issuances_month_chk', sql`extract(day from ${t.month}) = 1`),
+  ],
+);
+
+/**
+ * Fee conditions of a work from a month on ("vigência"): the new fee rate and INCC periodicity,
+ * valid until the next term. Before the first term the work's own fields apply.
+ */
+export const workFeeTerms = pgTable(
+  'work_fee_terms',
+  {
+    workId: uuid('work_id')
+      .notNull()
+      .references(() => works.id, { onDelete: 'cascade' }),
+    month: date('month', { mode: 'string' }).notNull(),
+    feeRate: fraction('fee_rate').notNull(),
+    inccPeriodicity: inccPeriodicityEnum('incc_periodicity').notNull(),
+    note: text('note'),
+    updatedById: uuid('updated_by_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.workId, t.month] }),
+    check('work_fee_terms_rate_chk', sql`${t.feeRate} >= 0 AND ${t.feeRate} <= 1`),
+    check('work_fee_terms_month_chk', sql`extract(day from ${t.month}) = 1`),
   ],
 );
 

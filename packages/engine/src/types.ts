@@ -68,6 +68,29 @@ export interface InccRate {
   rate: DecimalString;
 }
 
+/** Published INCC number-index of a month (e.g. FGV INCC-DI of AGO/26 = 1296.889). */
+export interface InccIndex {
+  month: IsoMonth;
+  index: DecimalString;
+}
+
+/**
+ * How often the balance to be received is corrected by the INCC. Each correction uses the INCC
+ * variation accumulated since the previous correction (one month, a quarter, four months…).
+ */
+export type InccPeriodicity = 'MONTHLY' | 'QUARTERLY' | 'FOUR_MONTHLY' | 'SEMIANNUAL' | 'ANNUAL';
+
+/**
+ * Fee conditions in force from a financial month on ("vigência"). Carries the new values, never
+ * a variation: `feeRate: '0.09'` means "9% from this month on", whatever the previous rate was.
+ */
+export interface FeeTerm {
+  month: IsoMonth;
+  /** Fee rate as a fraction (0.09 = 9%) applied to the fee received from `month` on. */
+  feeRate: DecimalString;
+  inccPeriodicity: InccPeriodicity;
+}
+
 /** How issuances and INCC changed the fee of a work (persisted with each version). */
 export interface FeeAdjustment {
   firstIssuedMonth: IsoMonth;
@@ -97,6 +120,20 @@ export interface ProjectionInput {
   feeIssuances?: readonly FeeIssuance[];
   /** INCC variations; INCC of M−1 corrects the balance to be received in M. */
   inccRates?: readonly InccRate[];
+  /**
+   * INCC number-indices (preferred over `inccRates`): the variation of a correction window is
+   * `index(last month) ÷ index(month before the window) − 1`, exact for any periodicity.
+   */
+  inccIndices?: readonly InccIndex[];
+  /** Periodicity of the INCC correction until the first fee term. Default MONTHLY. */
+  inccPeriodicity?: InccPeriodicity;
+  /**
+   * "Data-base" of the INCC cycle: corrections fall every N months counted from it (N = 3 for
+   * QUARTERLY…). Default = start month. Irrelevant for MONTHLY.
+   */
+  inccBaseMonth?: IsoMonth;
+  /** Changes of the fee conditions over time (new rate / INCC periodicity from a month on). */
+  feeTerms?: readonly FeeTerm[];
 }
 
 export interface ProjectionCell {
@@ -129,6 +166,10 @@ export interface ProjectionResult {
     mode: RecalcMode;
     manualCount: number;
     feeAdjustment: FeeAdjustment | null;
+    inccPeriodicity: InccPeriodicity;
+    inccBaseMonth: IsoMonth;
+    /** Canonical fee terms applied (sorted, 8-decimal rates). */
+    feeTerms: FeeTerm[];
   };
   validations: ValidationIssue[];
 }

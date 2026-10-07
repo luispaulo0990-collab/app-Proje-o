@@ -57,6 +57,13 @@
       "when": 1791224179603,
       "tag": "0007_work_status_not_started",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791393017369,
+      "tag": "0008_work_fee_terms",
+      "breakpoints": true
     }
   ]
 }

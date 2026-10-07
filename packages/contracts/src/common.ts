@@ -15,6 +15,31 @@ export const fractionString = decimalString
   .refine((v) => !v.startsWith('-'), 'O percentual não pode ser negativo.')
   .refine((v) => (v.split('.')[1]?.length ?? 0) <= 12, 'Precisão máxima excedida.');
 
+/**
+ * How often the fee balance is corrected by the INCC: every month, quarter, four months,
+ * semester or year (the INCC accumulated over the period is applied at once).
+ */
+export const inccPeriodicitySchema = z.enum([
+  'MONTHLY',
+  'QUARTERLY',
+  'FOUR_MONTHLY',
+  'SEMIANNUAL',
+  'ANNUAL',
+]);
+export type InccPeriodicity = z.infer<typeof inccPeriodicitySchema>;
+
+/** Competence month in the URL or body: `AAAA-MM` or `AAAA-MM-01` → `AAAA-MM-01`. */
+export const isoMonth = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])(-01)?$/, 'Mês inválido (AAAA-MM ou AAAA-MM-01).')
+  .transform((v) => (v.length === 7 ? `${v}-01` : v));
+
+/** Fee rate as a fraction between 0 and 1 (0.08 = 8%). Shared by the work and its fee terms. */
+export const feeRateString = fractionString.refine(
+  (v) => Number(v) <= 1,
+  'A taxa deve ser no máximo 100%.',
+);
+
 export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (AAAA-MM-DD).');
 
 export const uuid = z.uuid();

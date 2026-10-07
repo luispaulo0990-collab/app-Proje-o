@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { decimalString, moneyString } from './common.js';
-
-/** Competence month in the URL or body: `AAAA-MM` or `AAAA-MM-01` → `AAAA-MM-01`. */
-export const isoMonth = z
-  .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])(-01)?$/, 'Mês inválido (AAAA-MM ou AAAA-MM-01).')
-  .transform((v) => (v.length === 7 ? `${v}-01` : v));
+import {
+  decimalString,
+  feeRateString,
+  inccPeriodicitySchema,
+  isoMonth,
+  moneyString,
+} from './common.js';
 
 export const monthParams = z.object({ month: isoMonth });
 
@@ -99,3 +99,42 @@ export const feeAdjustmentDto = z.object({
   expectedFee: z.string(),
 });
 export type FeeAdjustmentDto = z.infer<typeof feeAdjustmentDto>;
+
+// ─── Vigências da taxa (por obra, a partir de um mês) ──────────────────────
+
+/** New conditions from the month in the URL on: the NEW rate (not the variation). */
+export const feeTermBody = z.object({
+  feeRate: feeRateString,
+  inccPeriodicity: inccPeriodicitySchema,
+  note: z.string().trim().max(500).optional(),
+});
+export type FeeTermBody = z.input<typeof feeTermBody>;
+
+export const feeTermDto = z.object({
+  workId: z.string(),
+  /** First financial month (fee received) under these conditions. */
+  month: z.string(),
+  feeRate: z.string(),
+  inccPeriodicity: inccPeriodicitySchema,
+  note: z.string().nullable(),
+  updatedBy: z.string().nullable(),
+  updatedAt: z.string(),
+});
+export type FeeTermDto = z.infer<typeof feeTermDto>;
+
+export const feeTermListResponse = z.object({
+  /** Conditions of the work registration, valid until the first term. */
+  base: z.object({
+    feeRate: z.string(),
+    inccPeriodicity: inccPeriodicitySchema,
+    inccBaseMonth: z.string(),
+  }),
+  items: z.array(feeTermDto),
+});
+export type FeeTermListResponse = z.infer<typeof feeTermListResponse>;
+
+export const feeTermResponse = z.object({
+  term: feeTermDto.nullable(),
+  projectionVersion: z.number().int(),
+});
+export type FeeTermResponse = z.infer<typeof feeTermResponse>;

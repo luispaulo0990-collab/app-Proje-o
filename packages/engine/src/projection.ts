@@ -14,10 +14,15 @@ import {
 import { distribute } from './distribution.js';
 import { EngineValidationError, assertNoErrors, issue } from './errors.js';
 import { FEE_COMPETENCE_LAG_MONTHS, buildFeeSchedule } from './fee-schedule.js';
+import { applyFeeRates, buildFeeTimeline } from './fee-terms.js';
+import { canonicalMonth, createInccVariation, isInccPeriodicity } from './incc.js';
 import { buildPeriods, buildSchedule, parseIsoDate } from './schedule.js';
 import type {
   CellOrigin,
   FeeAdjustment,
+  FeeTerm,
+  InccPeriodicity,
+  IsoMonth,
   ManualCell,
   Period,
   ProjectionCell,
@@ -51,6 +56,24 @@ function validateScalars(input: ProjectionInput): { budget: Decimal; feeRate: De
   }
   if (issues.length > 0) throw new EngineValidationError(issues);
   return { budget, feeRate };
+}
+
+/** Periodicity (default MONTHLY) and data-base (default: start month) of the INCC cycle. */
+function validateInccCycle(input: ProjectionInput): {
+  periodicity: InccPeriodicity;
+  baseMonth: IsoMonth;
+} {
+  const periodicity = input.inccPeriodicity ?? 'MONTHLY';
+  const baseMonth = canonicalMonth(input.inccBaseMonth ?? input.startDate);
+  const issues: ValidationIssue[] = [];
+  if (!isInccPeriodicity(periodicity)) {
+    issues.push(
+      issue('INVALID_INCC_PERIODICITY', `Periodicidade do INCC inválida: "${periodicity}".`),
+    );
+  }
+  if (!baseMonth) issues.push(issue('INVALID_INCC_BASE_MONTH', 'Mês-base do INCC inválido.'));
+  if (!baseMonth || issues.length > 0) throw new EngineValidationError(issues);
+  return { periodicity, baseMonth };
 }
 
 function collectManual(
@@ -143,9 +166,10 @@ function toCells(
  * 2. curve validated and resampled to the duration
  * 3. physical series (fractions, 8 decimals, Σ = 100%)
  * 4. manual cells preserved or discarded according to `mode`
- * 5. fee series = fee total × physical, received one month later (competência M−1)
+ * 5. fee series = budget × physical × rate in force in the month (fee terms), received one month
+ *    later (competência M−1)
  * 6. from the first fee issuance on: invoiced values + INCC-corrected balance projected by the
- *    curve (see buildFeeSchedule)
+ *    curve, corrected monthly or every N months (see buildFeeSchedule)
  */
 export function calculateProjection(input: ProjectionInput): ProjectionResult {
   const schedule = buildSchedule(input.startDate, input.durationMonths);
@@ -166,20 +190,36 @@ export function calculateProjection(input: ProjectionInput): ProjectionResult {
 
   const physical = distribute(weights, manualPhysical, ONE, PCT_SCALE, 'PHYSICAL', issues);
 
-  const feeTotal = roundTo(budget.times(feeRate), MONEY_SCALE);
-  const feeOriginal = allocateLargestRemainder(shift(physicalOriginal, lag), feeTotal, MONEY_SCALE);
-  const feeWeights = shift(physical.values, lag);
-
   const { year, month } = parseIsoDate(input.startDate);
   const financialPeriods = buildPeriods({ year, month }, horizon);
+  const cycle = validateInccCycle(input);
+  const timeline = buildFeeTimeline(
+    { feeRate, inccPeriodicity: cycle.periodicity },
+    input.feeTerms ?? [],
+    financialPeriods,
+    issues,
+  );
+  const variation = createInccVariation(
+    { indices: input.inccIndices, rates: input.inccRates },
+    issues,
+  );
+
+  // Curve-only reference ("original") and series in force, both at the rate of each month.
+  const feeOriginal = applyFeeRates(
+    shift(physicalOriginal, lag),
+    financialPeriods,
+    timeline,
+    budget,
+  );
+  const rated = applyFeeRates(shift(physical.values, lag), financialPeriods, timeline, budget);
   const fee = buildFeeSchedule(
     {
       periods: financialPeriods,
-      weights: feeWeights,
+      weights: rated.weights,
       manual: manualFee,
-      feeTotal,
+      feeTotal: rated.total,
       issuances: input.feeIssuances ?? [],
-      inccRates: input.inccRates ?? [],
+      incc: { variation, periodicityAt: timeline.periodicityAt, baseMonth: cycle.baseMonth },
     },
     issues,
   );
@@ -190,7 +230,12 @@ export function calculateProjection(input: ProjectionInput): ProjectionResult {
     schedule,
     financialPeriods,
     physical: toCells(schedule.periods, physicalOriginal, physical, PCT_SCALE),
-    fee: toCells(financialPeriods, feeOriginal, fee, MONEY_SCALE),
+    fee: toCells(
+      financialPeriods,
+      allocateLargestRemainder(feeOriginal.weights, feeOriginal.total, MONEY_SCALE),
+      fee,
+      MONEY_SCALE,
+    ),
     totals: {
       physical: toFixedString(sum(physical.values), PCT_SCALE),
       fee: toFixedString(sum(fee.values), MONEY_SCALE),
@@ -203,6 +248,9 @@ export function calculateProjection(input: ProjectionInput): ProjectionResult {
       mode,
       manualCount: physical.manual.size + fee.manual.size,
       feeAdjustment: fee.adjustment,
+      inccPeriodicity: cycle.periodicity,
+      inccBaseMonth: cycle.baseMonth,
+      feeTerms: timeline.terms,
     },
     validations: issues,
   };
@@ -234,6 +282,11 @@ export interface StoredProjection {
   mode?: RecalcMode;
   /** Issuance/INCC summary of the version; null = fee follows budget × rate. */
   feeAdjustment?: FeeAdjustment | null;
+  /** Fee the version adds up to (since fee terms); older versions derive it. */
+  expectedFee?: string;
+  inccPeriodicity?: InccPeriodicity;
+  inccBaseMonth?: IsoMonth;
+  feeTerms?: readonly FeeTerm[];
   physical: readonly StoredCell[];
   fee: readonly StoredCell[];
 }
@@ -287,9 +340,11 @@ export function hydrateProjection(stored: StoredProjection): ProjectionResult {
   const physical = rebuild(schedule.periods, stored.physical, PCT_SCALE, 'PHYSICAL');
   const fee = rebuild(financialPeriods, stored.fee, MONEY_SCALE, 'FEE');
   const adjustment = stored.feeAdjustment ?? null;
-  const expectedFee = adjustment
-    ? toDecimal(adjustment.expectedFee)
-    : roundTo(toDecimal(stored.budget).times(stored.feeRate), MONEY_SCALE);
+  const expectedFee = stored.expectedFee
+    ? toDecimal(stored.expectedFee)
+    : adjustment
+      ? toDecimal(adjustment.expectedFee)
+      : roundTo(toDecimal(stored.budget).times(stored.feeRate), MONEY_SCALE);
   if (!physical.total.equals(ONE)) {
     issues.push(
       issue(
@@ -329,6 +384,9 @@ export function hydrateProjection(stored: StoredProjection): ProjectionResult {
       mode: stored.mode ?? 'PRESERVE_MANUAL',
       manualCount: physical.manualCount + fee.manualCount,
       feeAdjustment: adjustment,
+      inccPeriodicity: stored.inccPeriodicity ?? 'MONTHLY',
+      inccBaseMonth: stored.inccBaseMonth ?? `${stored.startDate.slice(0, 7)}-01`,
+      feeTerms: [...(stored.feeTerms ?? [])],
     },
     validations: issues,
   };

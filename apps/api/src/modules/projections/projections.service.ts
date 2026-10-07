@@ -1,5 +1,4 @@
 import {
-  inccRatesFromIndices,
   FEE_COMPETENCE_LAG_MONTHS,
   calculateProjection,
   computeKpis,
@@ -9,6 +8,8 @@ import {
   resolveEffectiveCurve,
   type EffectiveCurve,
   type FeeAdjustment,
+  type FeeTerm,
+  type InccPeriodicity,
   type ManualCell,
   type ProjectionResult,
   type RecalcMode,
@@ -36,6 +37,10 @@ import {
   toEngineIssuance,
 } from '../../database/repositories/fee-issuances.repository.js';
 import {
+  feeTermsRepository,
+  toEngineFeeTerm,
+} from '../../database/repositories/fee-terms.repository.js';
+import {
   inccIndicesRepository,
   toEngineInccIndex,
 } from '../../database/repositories/incc-indices.repository.js';
@@ -49,7 +54,7 @@ import type { Actor, AppDeps, AuthUser } from '../../types.js';
 import { currentMonth, toMonth } from '../../utils/dates.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 
-export const ENGINE_VERSION = '0.3.0';
+export const ENGINE_VERSION = '0.4.0';
 
 /** Snapshot persisted with every projection version (traceability — spec §39). */
 export interface ProjectionParameters {
@@ -71,6 +76,12 @@ export interface ProjectionParameters {
   droppedManualCells?: number;
   /** Issuances/INCC in force when the version was generated (null = budget × rate). */
   feeAdjustment?: FeeAdjustment | null;
+  /** Fee the version adds up to (engine ≥ 0.4.0: may differ from budget × rate). */
+  expectedFee?: string;
+  inccPeriodicity?: InccPeriodicity;
+  inccBaseMonth?: string;
+  /** Fee terms ("vigências") applied by the version. */
+  feeTerms?: FeeTerm[];
   /** Legacy (≤ 0.2.0): "Ajuste projeção de taxa", replaced by the fee issuances. */
   feeRecalibration?: unknown;
 }
@@ -101,6 +112,10 @@ export function hydrateStoredProjection(
     feeLagMonths: params.feeLagMonths,
     mode: params.mode,
     feeAdjustment: params.feeAdjustment ?? null,
+    expectedFee: params.expectedFee,
+    inccPeriodicity: params.inccPeriodicity,
+    inccBaseMonth: params.inccBaseMonth,
+    feeTerms: params.feeTerms,
     physical: pick('PHYSICAL'),
     fee: pick('FEE'),
   });
@@ -193,9 +208,10 @@ export async function generateProjection(
 ): Promise<{ row: ProjectionRow; result: ProjectionResult; dropped: number }> {
   const { effective, actual } = await resolveWorkCurve(tx, work);
   const kept = placeManualCells(options.manualCells, effective);
-  const [issuances, inccIndices] = await Promise.all([
+  const [issuances, inccIndices, feeTerms] = await Promise.all([
     feeIssuancesRepository.listByWork(tx, work.id),
     inccIndicesRepository.list(tx),
+    feeTermsRepository.listByWork(tx, work.id),
   ]);
   const result = calculateProjection({
     startDate: effective.startDate,
@@ -206,8 +222,12 @@ export async function generateProjection(
     manualCells: kept,
     mode: options.mode,
     feeIssuances: issuances.map(toEngineIssuance),
-    // The engine derives the monthly variation from the number-index (single rule).
-    inccRates: inccRatesFromIndices(inccIndices.map(toEngineInccIndex)),
+    // The engine derives the variation of each correction window from the number-index.
+    inccIndices: inccIndices.map(toEngineInccIndex),
+    inccPeriodicity: work.inccPeriodicity,
+    // The INCC cycle follows the contract (planned start), not the own-curve start.
+    inccBaseMonth: work.inccBaseMonth ?? toMonth(work.startDate),
+    feeTerms: feeTerms.map(toEngineFeeTerm),
   });
   const dropped = options.mode === 'PRESERVE_MANUAL' ? options.manualCells.length - kept.length : 0;
   const workActualCurveId = effective.source === 'WORK_ACTUAL' ? (actual?.id ?? null) : null;
@@ -228,6 +248,10 @@ export async function generateProjection(
     engineVersion: ENGINE_VERSION,
     ...(dropped > 0 ? { droppedManualCells: dropped } : {}),
     feeAdjustment: result.parameters.feeAdjustment,
+    expectedFee: result.totals.expectedFee,
+    inccPeriodicity: result.parameters.inccPeriodicity,
+    inccBaseMonth: result.parameters.inccBaseMonth,
+    feeTerms: result.parameters.feeTerms,
   };
   const row = await projectionsRepository.createVersion(
     tx,

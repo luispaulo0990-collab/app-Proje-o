@@ -4,6 +4,9 @@ import {
   feeIssuanceBody,
   feeIssuanceListResponse,
   feeIssuanceResponse,
+  feeTermBody,
+  feeTermListResponse,
+  feeTermResponse,
   idParams,
   inccIndexBatchBody,
   inccIndexBatchResponse,
@@ -13,6 +16,7 @@ import {
   monthParams,
 } from '@unita/contracts';
 import { currentActor, requireRoleOrApiKey } from '../../middleware/auth.js';
+import { createFeeTermsService } from './fee-terms.service.js';
 import { createFeesService } from './fees.service.js';
 
 const errors = {
@@ -78,6 +82,61 @@ export const feeIssuancesRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (req) => service.deleteIssuance(req.params.id, req.params.month, currentActor(req)),
+  );
+};
+
+/** Fee conditions over time ("vigências") of a work — mounted under /works. */
+export const feeTermsRoutes: FastifyPluginAsyncZod = async (app) => {
+  const service = createFeeTermsService(app.deps);
+
+  app.get(
+    '/:id/fee-terms',
+    {
+      preHandler: requireRoleOrApiKey('VIEWER'),
+      schema: {
+        tags,
+        security,
+        summary: 'Vigências da taxa da obra (taxa e periodicidade do INCC a partir de cada mês)',
+        params: idParams,
+        response: { 200: feeTermListResponse, ...errors },
+      },
+    },
+    async (req) => service.list(req.params.id),
+  );
+
+  app.put(
+    '/:id/fee-terms/:month',
+    {
+      preHandler: requireRoleOrApiKey('EDITOR'),
+      schema: {
+        tags,
+        security,
+        summary: 'Define a taxa e a correção pelo INCC a partir do mês',
+        description:
+          'Informe a NOVA taxa (ex.: 0.09 = 9%), não a variação. Vale para a taxa recebida a ' +
+          'partir do mês até a próxima vigência; os meses anteriores não mudam. ' +
+          'Gera nova versão da projeção, preservando os ajustes manuais.',
+        params: workMonthParams,
+        body: feeTermBody,
+        response: { 200: feeTermResponse, ...errors },
+      },
+    },
+    async (req) => service.set(req.params.id, req.params.month, req.body, currentActor(req)),
+  );
+
+  app.delete(
+    '/:id/fee-terms/:month',
+    {
+      preHandler: requireRoleOrApiKey('EDITOR'),
+      schema: {
+        tags,
+        security,
+        summary: 'Remove a vigência do mês (volta às condições anteriores)',
+        params: workMonthParams,
+        response: { 200: feeTermResponse, ...errors },
+      },
+    },
+    async (req) => service.remove(req.params.id, req.params.month, currentActor(req)),
   );
 };
 

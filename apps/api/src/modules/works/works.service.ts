@@ -18,7 +18,15 @@ import { AppError, conflict, notFound } from '../../utils/errors.js';
 import { generateProjection } from '../projections/projections.service.js';
 
 /** Fields that feed the ProjectionEngine — changing any of them affects the projection. */
-const CALC_FIELDS = ['budget', 'feeRate', 'curveVersionId', 'startDate', 'durationMonths'] as const;
+const CALC_FIELDS = [
+  'budget',
+  'feeRate',
+  'inccPeriodicity',
+  'inccBaseMonth',
+  'curveVersionId',
+  'startDate',
+  'durationMonths',
+] as const;
 const DECIMAL_FIELDS = new Set(['budget', 'feeRate']);
 const TRACKED_FIELDS = ['name', 'units', 'constructionSystem', 'status', ...CALC_FIELDS] as const;
 type TrackedField = (typeof TRACKED_FIELDS)[number];
@@ -33,6 +41,8 @@ export function toWorkDto(r: WorkWithRelations): WorkDto {
     budget: r.work.budget,
     feeRate: r.work.feeRate,
     feeTotal: computeFeeTotal(r.work.budget, r.work.feeRate),
+    inccPeriodicity: r.work.inccPeriodicity,
+    inccBaseMonth: r.work.inccBaseMonth,
     constructionSystem: r.work.constructionSystem,
     curve: {
       id: r.curveId,
@@ -207,6 +217,8 @@ export function createWorksService({ db }: AppDeps) {
             units: source.units,
             budget: source.budget,
             feeRate: source.feeRate,
+            inccPeriodicity: source.inccPeriodicity,
+            inccBaseMonth: source.inccBaseMonth,
             constructionSystem: source.constructionSystem,
             curveVersionId: source.curve.versionId,
             startDate: source.startDate,

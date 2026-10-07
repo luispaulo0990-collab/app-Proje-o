@@ -64,7 +64,7 @@ describe('Cópia do banco da demonstração para o servidor', () => {
       passwordHash: 'hash',
       role: 'ADMIN',
     });
-    target = createDatabase(process.env.TEST_DATABASE_URL!, 2);
+    target = createDatabase(process.env.TEST_DATABASE_URL ?? '', 2);
   });
 
   afterAll(async () => {

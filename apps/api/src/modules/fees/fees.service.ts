@@ -22,21 +22,18 @@ import type { Db } from '../../database/client.js';
 import { auditRepository } from '../../database/repositories/audit.repository.js';
 import {
   feeIssuancesRepository,
-  type FeeIssuanceRow,
   type FeeIssuanceWithAuthor,
 } from '../../database/repositories/fee-issuances.repository.js';
 import {
   inccIndicesRepository,
   toEngineInccIndex,
-  type InccIndexRow,
   type InccIndexWithAuthor,
 } from '../../database/repositories/incc-indices.repository.js';
 import { worksRepository, type WorkRow } from '../../database/repositories/works.repository.js';
 import type { Actor, AppDeps } from '../../types.js';
 import { AppError, notFound } from '../../utils/errors.js';
 import { regenerateKeepingManualCells } from '../projections/projections.service.js';
-
-const label = (month: string) => `${month.slice(5, 7)}/${month.slice(0, 4)}`;
+import { monthLabel as label, withAuthor } from './fee-inputs.shared.js';
 
 export const toIssuanceDto = (r: FeeIssuanceWithAuthor): FeeIssuanceDto => ({
   workId: r.workId,
@@ -76,11 +73,6 @@ export async function regenerateWorksWithIssuances(tx: Db, actor: Actor, note: s
   }
   return ids.length;
 }
-
-const withAuthor = <T extends FeeIssuanceRow | InccIndexRow>(row: T, actor: Actor) => ({
-  ...row,
-  updatedBy: actor.user?.name ?? (actor.integration ? `Integração: ${actor.integration}` : null),
-});
 
 /**
  * Fee inputs of the Consolidado: "taxa emitida" per work/month and the monthly INCC.

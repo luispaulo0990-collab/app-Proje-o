@@ -1,20 +1,16 @@
 import { z } from 'zod';
 import {
-  fractionString,
+  feeRateString,
+  inccPeriodicitySchema,
   isoDate,
+  isoMonth,
   moneyString,
   paginated,
   paginationQuery,
   uuid,
 } from './common.js';
 
-export const workStatusSchema = z.enum([
-  'DRAFT',
-  'NOT_STARTED',
-  'ACTIVE',
-  'COMPLETED',
-  'ARCHIVED',
-]);
+export const workStatusSchema = z.enum(['DRAFT', 'NOT_STARTED', 'ACTIVE', 'COMPLETED', 'ARCHIVED']);
 export type WorkStatus = z.infer<typeof workStatusSchema>;
 
 export const workBody = z.object({
@@ -25,7 +21,11 @@ export const workBody = z.object({
     .int('Informe um número inteiro.')
     .positive('A quantidade de unidades deve ser maior que zero.'),
   budget: moneyString,
-  feeRate: fractionString.refine((v) => Number(v) <= 1, 'A taxa deve ser no máximo 100%.'),
+  feeRate: feeRateString,
+  /** INCC correction until the first fee term (see /works/:id/fee-terms). */
+  inccPeriodicity: inccPeriodicitySchema.default('MONTHLY'),
+  /** "Data-base" of the INCC cycle (`AAAA-MM`); null/omitted = start month of the work. */
+  inccBaseMonth: isoMonth.nullable().default(null),
   constructionSystem: z.string().trim().min(2, 'Informe o sistema construtivo.').max(120),
   curveVersionId: uuid,
   startDate: isoDate,
@@ -43,6 +43,8 @@ export const workDto = z.object({
   budget: z.string(),
   feeRate: z.string(),
   feeTotal: z.string(),
+  inccPeriodicity: inccPeriodicitySchema,
+  inccBaseMonth: z.string().nullable(),
   constructionSystem: z.string(),
   curve: z.object({ id: uuid, name: z.string(), versionId: uuid, version: z.number().int() }),
   startDate: z.string(),

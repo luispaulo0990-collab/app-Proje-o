@@ -81,4 +81,10 @@ export {
   type EconomicEntry,
   type EconomicIndicators,
 } from './economic-indicators.js';
-export { INCC_INDEX_SCALE, inccRatesFromIndices, type InccIndex } from './incc.js';
+export {
+  INCC_INDEX_SCALE,
+  INCC_PERIOD_MONTHS,
+  INCC_PERIODICITIES,
+  inccRatesFromIndices,
+  isInccPeriodicity,
+} from './incc.js';

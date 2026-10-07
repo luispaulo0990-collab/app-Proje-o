@@ -247,6 +247,83 @@ describe('INCC number-index (/incc-indices)', () => {
   });
 });
 
+describe('PUT/DELETE /works/:id/fee-terms/:month (vigências da taxa)', () => {
+  const feeOf = async (month: string) => {
+    const projection = (await inject('GET', `/projections/${workId}`)).json();
+    return {
+      fee: projection.fee.find((c: { month: string }) => c.month === month)?.current,
+      expectedFee: projection.totals.expectedFee,
+    };
+  };
+
+  it('applies the new rate typed (not the variation) from the month on', async () => {
+    const put = await inject('PUT', `/works/${workId}/fee-terms/2027-03`, {
+      feeRate: '0.12',
+      inccPeriodicity: 'MONTHLY',
+      note: 'Aditivo 1',
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({
+      term: { month: '2027-03-01', feeRate: '0.12000000', updatedBy: 'Usuário Teste' },
+      projectionVersion: 2,
+    });
+    // FEV/27 keeps 10% (400,00); MAR/27 on: 1,2% × 1.000.000 × 12% = 1.440,00.
+    // Fee = 1.000.000 × (0,004 × 10% + 0,996 × 12%) = 119.920,00.
+    expect(await feeOf('2027-02-01')).toMatchObject({ fee: '400.00' });
+    expect(await feeOf('2027-03-01')).toEqual({ fee: '1440.00', expectedFee: '119920.00' });
+
+    const list = (await inject('GET', `/works/${workId}/fee-terms`, undefined, viewer)).json();
+    expect(list).toMatchObject({
+      base: { feeRate: '0.10000000', inccPeriodicity: 'MONTHLY', inccBaseMonth: '2027-01-01' },
+      items: [{ month: '2027-03-01', inccPeriodicity: 'MONTHLY', note: 'Aditivo 1' }],
+    });
+    const history = (await inject('GET', `/works/${workId}/audit`)).json();
+    expect(history.items.find((i: { action: string }) => i.action === 'FEE_TERM')).toMatchObject({
+      field: 'Vigência da taxa 03/2027',
+      newValue: '12% · INCC mensal',
+    });
+
+    const del = await inject('DELETE', `/works/${workId}/fee-terms/2027-03`);
+    expect(del.json()).toMatchObject({ term: null, projectionVersion: 3 });
+    expect((await feeOf('2027-03-01')).expectedFee).toBe('100000.00');
+  });
+
+  it('corrects the balance once per quarter by the INCC accumulated in it', async () => {
+    await inject('PUT', `/works/${workId}/fee-terms/2027-01`, {
+      feeRate: '0.10',
+      inccPeriodicity: 'QUARTERLY',
+    });
+    await inject('PUT', '/incc-indices', {
+      items: [
+        { month: '2026-12', index: '1000' },
+        { month: '2027-01', index: '1010' },
+        { month: '2027-02', index: '1020' },
+        { month: '2027-03', index: '1030.2' },
+      ],
+    });
+    await inject('PUT', `/works/${workId}/fee-issuances/2027-03`, { amount: '1000.00' });
+    await inject('PUT', `/works/${workId}/fee-issuances/2027-04`, { amount: '2000.00' });
+    // Data-base JAN/27: MAR is not corrected; ABR by JAN..MAR (1030,2 ÷ 1000 − 1 = 3,02%):
+    // (100.000 − 400 − 1.000) × 1,0302 = 101.577,72 − 2.000 = 99.577,72 to be received.
+    expect((await consolidatedAt('2027-04-15')).work).toMatchObject({
+      feeRemaining: '99577.72',
+      feeAdjustment: { inccCorrection: '2977.72' },
+    });
+  });
+
+  it('validates rate, periodicity and role', async () => {
+    const put = (body: object, token = admin) =>
+      inject('PUT', `/works/${workId}/fee-terms/2027-03`, body, token);
+    expect((await put({ feeRate: '1.5', inccPeriodicity: 'MONTHLY' })).statusCode).toBe(400);
+    expect((await put({ feeRate: '0.09', inccPeriodicity: 'WEEKLY' })).statusCode).toBe(400);
+    expect((await put({ feeRate: '0.09' })).statusCode).toBe(400);
+    expect((await put({ feeRate: '0.09', inccPeriodicity: 'MONTHLY' }, viewer)).statusCode).toBe(
+      403,
+    );
+    expect((await inject('DELETE', `/works/${workId}/fee-terms/2027-03`)).statusCode).toBe(404);
+  });
+});
+
 describe('upgrade of projections generated under the previous fee rules', () => {
   it('regenerates them once with the M−1 competence, keeping manual cells', async () => {
     await inject('PUT', `/projections/${workId}`, {
