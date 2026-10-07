@@ -140,8 +140,3 @@ export async function importPainelWorks(
   if (created > 0) log(`${created} obra(s) importada(s) da planilha Painel de Obras.`);
   return { created, skipped };
 }
-
-/** Works of the sheet that could not be imported (no progress, budget or fee rate). */
-export const painelSkipped = (
-  painel as { skipped: { client: string; name: string; reason: string }[] }
-).skipped;

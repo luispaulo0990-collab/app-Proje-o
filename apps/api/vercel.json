@@ -1,5 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && npm ci --include=dev",
-  "buildCommand": "npm run build --workspace=@unita/contracts --workspace=@unita/engine --workspace=@unita/api"
-}

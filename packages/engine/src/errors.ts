@@ -20,6 +20,7 @@ export function issue(
   return context ? { code, severity, message, context } : { code, severity, message };
 }
 
+/** Throws an EngineValidationError with the blocking issues (warnings are kept). */
 export function assertNoErrors(issues: ValidationIssue[]): void {
   const errors = issues.filter((i) => i.severity === 'ERROR');
   if (errors.length > 0) throw new EngineValidationError(errors);

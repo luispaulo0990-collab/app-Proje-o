@@ -12,7 +12,7 @@ import {
   toFixedString,
 } from './decimal.js';
 import { distribute } from './distribution.js';
-import { EngineValidationError, issue } from './errors.js';
+import { EngineValidationError, assertNoErrors, issue } from './errors.js';
 import { FEE_COMPETENCE_LAG_MONTHS, buildFeeSchedule } from './fee-schedule.js';
 import { buildPeriods, buildSchedule, parseIsoDate } from './schedule.js';
 import type {
@@ -184,9 +184,7 @@ export function calculateProjection(input: ProjectionInput): ProjectionResult {
     issues,
   );
 
-  if (issues.some((i) => i.severity === 'ERROR')) {
-    throw new EngineValidationError(issues.filter((i) => i.severity === 'ERROR'));
-  }
+  assertNoErrors(issues);
 
   return {
     schedule,

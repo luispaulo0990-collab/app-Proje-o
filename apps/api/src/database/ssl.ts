@@ -11,8 +11,6 @@ import type { ConnectionOptions } from 'node:tls';
  */
 export type DatabaseSslMode = 'auto' | 'disable' | 'require' | 'verify-full';
 
-export const SSL_MODES: readonly DatabaseSslMode[] = ['auto', 'disable', 'require', 'verify-full'];
-
 /** Query parameters that `pg` would otherwise turn into its own TLS settings (overriding ours). */
 const SSL_URL_PARAMS = ['ssl', 'sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'uselibpqcompat'];
 

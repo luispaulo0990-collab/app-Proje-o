@@ -6,7 +6,7 @@ import { forbidden, unauthorized } from '../utils/errors.js';
 
 const RANK: Record<Role, number> = { VIEWER: 1, EDITOR: 2, ADMIN: 3 };
 
-export function hasRole(user: AuthUser, minimum: Role): boolean {
+function hasRole(user: AuthUser, minimum: Role): boolean {
   return RANK[user.role] >= RANK[minimum];
 }
 

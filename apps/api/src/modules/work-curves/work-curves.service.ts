@@ -305,7 +305,7 @@ function endOfMonth(month: string): string {
 }
 
 /** Continuous month axis covering every cell. */
-export function monthAxis(cells: readonly { month: string }[]) {
+function monthAxis(cells: readonly { month: string }[]) {
   if (cells.length === 0) return [];
   const sorted = [...new Set(cells.map((c) => c.month))].sort();
   const first = sorted[0] as string;
