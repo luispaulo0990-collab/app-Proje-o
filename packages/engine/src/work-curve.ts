@@ -3,6 +3,12 @@ import { assertValidCurve, canonicalizeCurve, resampleCurve } from './curve.js';
 import { ONE, PCT_SCALE, ZERO, toFixedString } from './decimal.js';
 import { issue } from './errors.js';
 import {
+  buildTrendCurve,
+  curveFingerprint,
+  type RealizedEntry,
+  type TrendInfo,
+} from './trend-curve.js';
+import {
   addMonths,
   buildSchedule,
   monthDiff,
@@ -43,6 +49,8 @@ export interface EffectiveCurveInput {
   referenceMonth: IsoMonth;
   parametric: readonly CurvePointInput[];
   actual?: ActualCurveInput | null;
+  /** "Realizado Acumulado" by month: with an own curve, it turns into a trend curve. */
+  realized?: readonly RealizedEntry[];
 }
 
 export interface EffectiveCurve {
@@ -54,7 +62,16 @@ export interface EffectiveCurve {
   /** Months of the effective schedule (own curve length or contract duration). */
   durationMonths: number;
   curve: CurvePoint[];
+  /** Set when the curve is realized + trend (see buildTrendCurve); null = curve as received. */
+  trend: TrendInfo | null;
+  /** Identifies start + points: a projection with another fingerprint is outdated. */
+  fingerprint: string;
   issues: ValidationIssue[];
+}
+
+/** Adds the fingerprint, computed from what the projection will actually use. */
+function withFingerprint(curve: Omit<EffectiveCurve, 'fingerprint'>): EffectiveCurve {
+  return { ...curve, fingerprint: curveFingerprint(curve.startDate.slice(0, 7), curve.curve) };
 }
 
 /** A work has started when its start month is on or before the reference month. */
@@ -68,7 +85,10 @@ export function hasWorkStarted(startDate: IsoDate, referenceMonth: IsoMonth): bo
  * panel and the "Curvas das obras" grid):
  *
  * 1. Not started at the reference month → parametric curve (even if an own curve exists).
- * 2. Started with own curve → own curve, from its own start month, with its own length.
+ * 2. Started with own curve → own curve, from its own start month, with its own length. When
+ *    the "Realizado Acumulado" is known, the curve is the realized progress up to the current
+ *    month followed by a trend built from the realized pace and the replanned curve
+ *    (buildTrendCurve) — rule defined 07/10/2026.
  * 3. Started without own curve → parametric curve + warning `ACTUAL_CURVE_MISSING`.
  */
 export function resolveEffectiveCurve(input: EffectiveCurveInput): EffectiveCurve {
@@ -78,15 +98,21 @@ export function resolveEffectiveCurve(input: EffectiveCurveInput): EffectiveCurv
   if (hasStarted && input.actual) {
     assertValidCurve(input.actual.points);
     const startMonth = toIsoMonth(parseIsoMonth(input.actual.startMonth));
-    return {
+    const trend = buildTrendCurve({
+      referenceMonth: input.referenceMonth,
+      replanned: { startMonth, points: input.actual.points },
+      realized: input.realized ?? [],
+    });
+    return withFingerprint({
       source: 'WORK_ACTUAL',
       status: 'STARTED_ACTUAL',
       hasStarted,
-      startDate: startMonth,
-      durationMonths: input.actual.points.length,
-      curve: canonicalizeCurve(input.actual.points),
-      issues,
-    };
+      startDate: trend?.startMonth ?? startMonth,
+      durationMonths: trend?.points.length ?? input.actual.points.length,
+      curve: trend?.points ?? canonicalizeCurve(input.actual.points),
+      trend: trend?.info ?? null,
+      issues: [...issues, ...(trend?.issues ?? [])],
+    });
   }
 
   if (hasStarted) {
@@ -108,15 +134,16 @@ export function resolveEffectiveCurve(input: EffectiveCurveInput): EffectiveCurv
       ),
     );
   }
-  return {
+  return withFingerprint({
     source: 'PARAMETRIC',
     status: hasStarted ? 'STARTED_AWAITING_ACTUAL' : 'NOT_STARTED',
     hasStarted,
     startDate: input.startDate,
     durationMonths: input.durationMonths,
     curve: canonicalizeCurve(input.parametric),
+    trend: null,
     issues,
-  };
+  });
 }
 
 export interface CurveSeriesCell {

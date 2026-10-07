@@ -280,6 +280,10 @@ export function createCurveSyncService(deps: AppDeps) {
         }
       }
 
+      // New realized months (and the month turn) move the trend curves: bring every projection
+      // in line with the curve in force (works with manual cells are only flagged stale).
+      if (!options.dryRun) await workCurves.sync(actor);
+
       const economic = options.economicProvider
         ? await syncEconomic(options.economicProvider, works, { dryRun: options.dryRun, actor })
         : null;

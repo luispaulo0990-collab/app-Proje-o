@@ -22,6 +22,7 @@ import {
   type ProgressIndicatorRow,
 } from '../../database/repositories/consolidated-inputs.repository.js';
 import { worksRepository, type WorkRow } from '../../database/repositories/works.repository.js';
+import { createWorkCurvesService } from '../work-curves/work-curves.service.js';
 import type { Actor, AppDeps } from '../../types.js';
 import { notFound } from '../../utils/errors.js';
 
@@ -160,7 +161,9 @@ export async function saveEconomicIndicators(
 }
 
 /** Planning-system progress indicators of the "Consolidado" (audited on every change). */
-export function createConsolidatedInputsService({ db }: AppDeps) {
+export function createConsolidatedInputsService(deps: AppDeps) {
+  const { db } = deps;
+  const workCurves = createWorkCurvesService(deps);
   async function loadWork(tx: Db, workId: string): Promise<WorkRow> {
     const found = await worksRepository.findById(tx, workId);
     if (!found) throw notFound('Obra');
@@ -178,9 +181,13 @@ export function createConsolidatedInputsService({ db }: AppDeps) {
       body: ProgressIndicatorsBody,
       actor: Actor,
     ): Promise<ProgressIndicatorsDto> {
-      await loadWork(db, workId);
+      const work = await loadWork(db, workId);
       const entries = canonicalProgressEntries(body.months);
-      await db.transaction((tx) => saveProgressIndicators(tx, workId, { ...body, entries }, actor));
+      await db.transaction(async (tx) => {
+        await saveProgressIndicators(tx, workId, { ...body, entries }, actor);
+        // A new "Realizado Acumulado" moves the trend curve of a started work.
+        await workCurves.refreshWork(tx, work, actor, 'Realizado acumulado atualizado');
+      });
       return toIndicatorsDto(workId, await progressIndicatorsRepository.listByWork(db, workId));
     },
 

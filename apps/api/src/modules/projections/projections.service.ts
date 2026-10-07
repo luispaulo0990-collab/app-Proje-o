@@ -11,8 +11,10 @@ import {
   type FeeTerm,
   type InccPeriodicity,
   type ManualCell,
+  type ProgressEntry,
   type ProjectionResult,
   type RecalcMode,
+  type TrendInfo,
   type Series,
 } from '@unita/engine';
 import type {
@@ -54,7 +56,7 @@ import type { Actor, AppDeps, AuthUser } from '../../types.js';
 import { currentMonth, toMonth } from '../../utils/dates.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 
-export const ENGINE_VERSION = '0.4.0';
+export const ENGINE_VERSION = '0.5.0';
 
 /** Snapshot persisted with every projection version (traceability — spec §39). */
 export interface ProjectionParameters {
@@ -66,6 +68,10 @@ export interface ProjectionParameters {
   curveSource?: 'PARAMETRIC' | 'WORK_ACTUAL';
   workActualCurveId?: string | null;
   workActualCurveVersion?: number | null;
+  /** Fingerprint of the curve used (engine ≥ 0.5.0): detects a newer realized/trend. */
+  curveFingerprint?: string;
+  /** Realized + trend summary when the own curve became a trend curve. */
+  trend?: TrendInfo | null;
   budget: string;
   feeRate: string;
   feeLagMonths: number;
@@ -159,7 +165,10 @@ function placeManualCells(
 
 const cellKey = (series: Series, periodIndex: number) => `${series}:${periodIndex}`;
 
-/** Curve in force for a work today (or at `referenceMonth`) — see resolveEffectiveCurve. */
+/**
+ * Curve in force for a work today (or at `referenceMonth`) — see resolveEffectiveCurve. The
+ * "Realizado Acumulado" turns the own curve into realized + trend.
+ */
 export async function resolveWorkCurve(
   tx: Db,
   work: WorkRow,
@@ -167,6 +176,7 @@ export async function resolveWorkCurve(
   preloaded?: {
     parametric?: Awaited<ReturnType<typeof curvesRepository.getPoints>>;
     actual?: ActualCurveWithPoints | null;
+    realized?: ProgressEntry[];
   },
 ): Promise<{ effective: EffectiveCurve; actual: ActualCurveWithPoints | null }> {
   const parametric =
@@ -175,23 +185,34 @@ export async function resolveWorkCurve(
     preloaded?.actual !== undefined
       ? preloaded.actual
       : ((await actualCurvesRepository.findCurrent(tx, work.id)) ?? null);
+  const realized =
+    preloaded?.realized ??
+    (await progressIndicatorsRepository.listByWork(tx, work.id)).map(toProgressEntry);
   const effective = resolveEffectiveCurve({
     startDate: work.startDate,
     durationMonths: work.durationMonths,
     referenceMonth,
     parametric,
     actual: actual ? { startMonth: actual.startMonth, points: actual.points } : null,
+    realized,
   });
   return { effective, actual };
 }
 
-/** True when the stored projection was generated from another curve than the one in force. */
+/**
+ * True when the stored projection was generated from another curve than the one in force —
+ * including a trend that moved (new realized month, or the month turned).
+ */
 export function projectionNeedsRecalc(
-  projection: Pick<ProjectionRow, 'curveSource' | 'workActualCurveId'>,
+  projection: Pick<ProjectionRow, 'curveSource' | 'workActualCurveId' | 'parameters'>,
   effective: EffectiveCurve,
   actual: ActualCurveWithPoints | null,
 ): boolean {
   if (projection.curveSource !== effective.source) return true;
+  const stored = (projection.parameters as ProjectionParameters | null)?.curveFingerprint;
+  if (stored) return stored !== effective.fingerprint;
+  // Versions generated before the fingerprint: outdated if a trend now applies.
+  if (effective.trend) return true;
   return effective.source === 'WORK_ACTUAL' && projection.workActualCurveId !== actual?.id;
 }
 
@@ -239,6 +260,8 @@ export async function generateProjection(
     curveSource: effective.source,
     workActualCurveId,
     workActualCurveVersion: workActualCurveId ? (actual?.version ?? null) : null,
+    curveFingerprint: effective.fingerprint,
+    trend: effective.trend,
     budget: result.parameters.budget,
     feeRate: result.parameters.feeRate,
     feeLagMonths: result.parameters.feeLagMonths,

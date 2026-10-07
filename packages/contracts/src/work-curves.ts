@@ -105,6 +105,21 @@ export const workCurvesQuery = referenceQuery.extend({
 });
 export type WorkCurvesQuery = z.infer<typeof workCurvesQuery>;
 
+/** How the curve of a started work was built from realized progress + trend (or null). */
+export const trendInfoDto = z.object({
+  /** Last month from "Realizado Acumulado"; the following months are the trend. */
+  lastRealizedMonth: z.string(),
+  realizedCumulative: z.string(),
+  /** Average realized monthly progress over the window. */
+  averagePace: z.string(),
+  windowMonths: z.number().int(),
+  /** Weight of the replanned curve in each trend month (rest = realized pace). */
+  planWeight: z.string(),
+  /** Months added after the replanned curve to reach 100%. */
+  extensionMonths: z.number().int(),
+});
+export type TrendInfoDto = z.infer<typeof trendInfoDto>;
+
 export const workCurveItemDto = z.object({
   workId: uuid,
   name: z.string(),
@@ -120,6 +135,7 @@ export const workCurveItemDto = z.object({
   endDate: z.string(),
   parametric: z.object({ curveId: uuid, name: z.string(), version: z.number().int() }),
   actual: actualCurveVersionDto.nullable(),
+  trend: trendInfoDto.nullable(),
   physicalAccumulated: decimalString,
   cells: z.array(
     z.object({ month: z.string(), label: z.string(), monthly: z.string(), cumulative: z.string() }),

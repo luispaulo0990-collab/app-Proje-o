@@ -111,6 +111,14 @@ Pasta local do usuário: `Desktop/Projeto APP-PROJEÇÃO` (raiz do repositório 
 - Testes: engine 114 · API 100 · web 7.
 - **A decidir com o usuário:** se a correção deve começar antes da 1ª taxa emitida (hoje, como na §15, o INCC só corrige o saldo depois da 1ª emissão); se a duplicação de obra deve copiar as vigências.
 
+## Concluído (07/10/2026 — Curva realizada + tendência)
+
+- Pedido do usuário: até o mês atual a curva da obra vem do **Realizado Acumulado** (mês atual só se tiver avanço); depois, **curva de tendência** combinando o realizado e o **Replanejado Atual Acumulado - Obra** (ex.: ritmo 3%, plano pede 15% → ~10%).
+- Regra: tendência = 0,6 × replanejado + 0,4 × ritmo médio dos últimos 3 meses, até 100% (prolonga no ritmo se o replanejado acabar antes). CALCULATION_RULES §18.
+- Recálculo automático quando chega realizado novo ou o mês vira (impressão digital da curva na projeção); “Curvas das obras” marca os meses de tendência.
+- Testes: engine 123 · API 102 · web 7.
+- **A validar com o usuário:** peso 0,6 do replanejado e janela de 3 meses (constantes `TREND_PLAN_WEIGHT`, `TREND_WINDOW_MONTHS`); se devem ser configuráveis por obra.
+
 ## Próximos passos
 
 1. **Fase 6** — grade editável estilo Excel (TanStack Table + virtualização): edição de célula, Enter/Tab/setas, copiar/colar, seleção múltipla, marcação manual, salvar em lote (PUT /projections/:workId já existe); visão de carteira já existe (Consolidado, somente leitura); falta virtualizar para centenas de obras.

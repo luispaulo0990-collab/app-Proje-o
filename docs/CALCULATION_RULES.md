@@ -111,11 +111,11 @@ Toda geração, recálculo ou lote de edições cria uma nova versão imutável 
 
 Regra única (`resolveEffectiveCurve`), usada pela projeção, pelo Consolidado e pela aba “Curvas das obras”:
 
-| Situação na data de referência         | Curva usada                                                           | Status                    |
-| -------------------------------------- | --------------------------------------------------------------------- | ------------------------- |
-| Mês de início **depois** da referência | Paramétrica (mesmo que já exista curva própria)                       | `NOT_STARTED`             |
-| Obra iniciada **com** curva própria    | Própria — com o **seu** mês de início e a **sua** quantidade de meses | `STARTED_ACTUAL`          |
-| Obra iniciada **sem** curva própria    | Paramétrica, com aviso `ACTUAL_CURVE_MISSING`                         | `STARTED_AWAITING_ACTUAL` |
+| Situação na data de referência         | Curva usada                                                                                                                 | Status                    |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Mês de início **depois** da referência | Paramétrica (mesmo que já exista curva própria)                                                                             | `NOT_STARTED`             |
+| Obra iniciada **com** curva própria    | Própria — com o **seu** mês de início e a **sua** quantidade de meses; com Realizado Acumulado, realizado + tendência (§18) | `STARTED_ACTUAL`          |
+| Obra iniciada **sem** curva própria    | Paramétrica, com aviso `ACTUAL_CURVE_MISSING`                                                                               | `STARTED_AWAITING_ACTUAL` |
 
 - “Iniciada” = mês de início ≤ mês de referência (competência).
 - A curva própria chega por `PUT /api/v1/works/:id/actual-curve` (usuário EDITOR ou sistema com `X-Api-Key`). Cada envio cria uma **nova versão imutável** (`work_actual_curves`), validada pelas mesmas regras das curvas paramétricas (§2). `normalize: true` reescala valores com ruído de arredondamento para somar 100%.
@@ -268,3 +268,17 @@ Definido em 07/10/2026. Motor 0.4.0 (`packages/engine/src/fee-terms.ts`, `incc.t
 **Avisos e rejeições:** `INVALID_FEE_TERM` (mês, taxa fora de 0–100% ou periodicidade inválida), `FEE_TERM_DUPLICATED`, `INVALID_INCC_PERIODICITY`, `INVALID_INCC_BASE_MONTH`; `FEE_TERM_OUT_OF_RANGE` (aviso: vigência depois do último mês de recebimento).
 
 **Rastreabilidade:** cada vigência salva ou removida gera nova versão da projeção (ajustes manuais preservados) e entra no histórico (`FEE_TERM`, `FEE_TERM_REMOVED`). `parameters` de cada versão guarda `feeTerms`, `inccPeriodicity`, `inccBaseMonth` e `expectedFee`. API: `GET/PUT/DELETE /works/:id/fee-terms[/:mes]` (`{ feeRate, inccPeriodicity, note? }`, JWT EDITOR ou `X-Api-Key`).
+
+## 18. Curva da obra iniciada: realizado + tendência
+
+Definido em 07/10/2026. Motor 0.5.0 (`packages/engine/src/trend-curve.ts`, `buildTrendCurve`). Vale para obras **iniciadas com curva própria** (§11) que já têm **Realizado Acumulado** (§13/§14). Sem realizado, a curva própria (Replanejado Atual Acumulado - Obra) continua sendo usada como chega.
+
+1. **Até o mês atual** a curva é o **Realizado Acumulado** da API (mensal = acumulado do mês − do mês anterior; mês sem dado repete o anterior; queda é ignorada com aviso `REALIZED_DECREASING`). O **mês atual** só entra como realizado se já tiver avanço; senão, ele é o 1º mês da tendência.
+2. **Ritmo** = avanço médio mensal realizado nos últimos **3 meses** (`TREND_WINDOW_MONTHS`; menos, se a obra começou há menos tempo).
+3. **Tendência** nos meses seguintes: `tendência(M) = 0,6 × replanejado(M) + 0,4 × ritmo` (`TREND_PLAN_WEIGHT = 0,6`). Ex.: ritmo 3% e replanejado pedindo 15% → 0,6 × 15% + 0,4 × 3% = **10,2%**.
+4. A tendência para ao chegar em **100%** (obra mais rápida que o plano termina antes). Se o replanejado acabar antes de 100%, a obra segue no seu ritmo (ou na média desde o início, se maior) até 100% — o **término projetado é empurrado** (`extensionMonths`). Limite de 600 meses (`TREND_TOO_LONG`).
+5. A curva resultante vira a curva física da projeção (taxa, Consolidado, Curvas das obras). Início = o mais cedo entre o início do replanejado e o 1º mês com realizado.
+
+**Recálculo** — cada projeção guarda a impressão digital da curva usada (`curveFingerprint`) e o resumo (`trend`). Chegou realizado novo (`PUT /works/:id/progress-indicators` ou importação do SharePoint) → a projeção é regenerada; com ajustes manuais, fica marcada como desatualizada (§8). A importação diária (cron) termina sincronizando todas as obras, então a virada do mês também é absorvida.
+
+**Tela** — em “Curvas das obras”, os meses de tendência aparecem em _itálico azul_ e a obra mostra “Tendência · ritmo X%/mês”.

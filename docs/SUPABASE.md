@@ -57,20 +57,20 @@ anterior são substituídos automaticamente pela cópia.
 
 **Project → Settings → Environment Variables** (Production):
 
-| Variável                 | Valor                                          |
-| ------------------------ | ---------------------------------------------- |
-| `DATABASE_URL`           | Transaction pooler (porta 6543)                |
-| `DATABASE_MIGRATION_URL` | Session pooler (porta 5432)                    |
-| `DATABASE_POOL_MAX`      | `3`                                            |
-| `DATABASE_SSL_CA`        | conteúdo do `prod-ca-2021.crt` (PEM ou base64) |
-| `AUTH_SECRET`            | o mesmo usado hoje (trocar desloga todo mundo) |
-| `AUTH_PROVIDER`          | `supabase`                                     |
-| `SUPABASE_URL`           | `https://fshyhsoyjcdtubpskfak.supabase.co`     |
-| `SUPABASE_PUBLISHABLE_KEY` | a chave `sb_publishable_…` (nunca a secret)  |
-| `NODE_ENV`               | `production`                                   |
-| `CORS_ORIGIN`/`APP_URL`  | `https://seu-dominio`                          |
-| `COOKIE_SECURE`          | `true`                                         |
-| `TRUST_PROXY`            | `true`                                         |
+| Variável                   | Valor                                          |
+| -------------------------- | ---------------------------------------------- |
+| `DATABASE_URL`             | Transaction pooler (porta 6543)                |
+| `DATABASE_MIGRATION_URL`   | Session pooler (porta 5432)                    |
+| `DATABASE_POOL_MAX`        | `3`                                            |
+| `DATABASE_SSL_CA`          | conteúdo do `prod-ca-2021.crt` (PEM ou base64) |
+| `AUTH_SECRET`              | o mesmo usado hoje (trocar desloga todo mundo) |
+| `AUTH_PROVIDER`            | `supabase`                                     |
+| `SUPABASE_URL`             | `https://fshyhsoyjcdtubpskfak.supabase.co`     |
+| `SUPABASE_PUBLISHABLE_KEY` | a chave `sb_publishable_…` (nunca a secret)    |
+| `NODE_ENV`                 | `production`                                   |
+| `CORS_ORIGIN`/`APP_URL`    | `https://seu-dominio`                          |
+| `COOKIE_SECURE`            | `true`                                         |
+| `TRUST_PROXY`              | `true`                                         |
 
 O build da Vercel (`npm run build:vercel`) já aplica as migrations e a carga idempotente usando
 `DATABASE_MIGRATION_URL`. Depois do deploy, o site passa a ler e gravar no Supabase.
@@ -112,11 +112,11 @@ confere as senhas; a tabela `users` guarda nome, papel e se o usuário está ati
 2. Na mesma hora aparece uma linha em **Table Editor → users** com `role = VIEWER`.
 3. Troque `role` para o nível desejado e salve:
 
-| `role`   | Pode                                                             |
-| -------- | ---------------------------------------------------------------- |
-| `VIEWER` | só visualizar                                                    |
-| `EDITOR` | criar/editar obras, projeções, taxa emitida, INCC, integrações   |
-| `ADMIN`  | tudo, inclusive curvas paramétricas e usuários                   |
+| `role`   | Pode                                                           |
+| -------- | -------------------------------------------------------------- |
+| `VIEWER` | só visualizar                                                  |
+| `EDITOR` | criar/editar obras, projeções, taxa emitida, INCC, integrações |
+| `ADMIN`  | tudo, inclusive curvas paramétricas e usuários                 |
 
 - A mudança de papel vale em até 15 minutos (ou no próximo login).
 - Para bloquear alguém: `is_active = false` em `users` (ou exclua o usuário em Authentication, o

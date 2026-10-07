@@ -36,7 +36,7 @@ export function WorkCurvesPage() {
     <>
       <PageHeader
         title="Curvas das obras"
-        description="Obras não iniciadas usam a curva paramétrica; obras iniciadas usam a própria curva (hoje, da planilha Painel de Obras; depois, da API do SharePoint)."
+        description="Obras não iniciadas usam a curva paramétrica. Obras iniciadas usam o Realizado Acumulado da API até o mês atual e, daí em diante, uma tendência entre o Replanejado Atual e o ritmo que a obra vem fazendo."
       />
       <div className="-mt-2 mb-5 flex flex-wrap items-center gap-2">
         <Input
@@ -135,7 +135,8 @@ export function WorkCurvesPage() {
               ))}
             </div>
             <p className="text-xs text-text-muted">
-              Valores em verde vêm da curva própria da obra; os demais, da curva paramétrica.
+              Verde: realizado / curva própria da obra · <em className="text-info">Itálico azul</em>
+              : tendência · demais: curva paramétrica.
             </p>
           </div>
 

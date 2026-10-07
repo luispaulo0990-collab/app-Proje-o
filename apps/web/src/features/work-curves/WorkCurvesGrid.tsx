@@ -3,12 +3,16 @@ import { Link } from 'react-router-dom';
 import type { WorkCurveItemDto, WorkCurvesResponse } from '@unita/contracts';
 import { Badge } from '@/components/ui';
 import { cn } from '@/utils/cn';
-import { formatDate, formatPercent } from '@/utils/format';
+import { formatDate, formatMonth, formatPercent, shiftDecimal } from '@/utils/format';
 import { useScrollToMonth } from '@/hooks/useScrollToMonth';
 import { CURVE_STATUS } from './curveStatus';
 
 export type CurveView = 'monthly' | 'cumulative';
 type Month = WorkCurvesResponse['months'][number];
+
+/** 1 − weight, as a decimal string ("0.60" → "0.4"), for the tooltip. */
+const ONE_MINUS = (weight: string) =>
+  shiftDecimal(String(100 - Number(shiftDecimal(weight, 2))), -2);
 
 const COL_WORK = 'sticky left-0 z-10 w-64 min-w-64 max-w-64';
 const cellBase = 'h-10 border-b border-border px-3 whitespace-nowrap';
@@ -27,6 +31,8 @@ const CurveRow = memo(function CurveRow({
   const cells = useMemo(() => new Map(item.cells.map((c) => [c.month, c])), [item.cells]);
   const status = CURVE_STATUS[item.curveStatus];
   const own = item.source === 'WORK_ACTUAL';
+  /** Months after the last realized one are the trend (shown in italics). */
+  const trendFrom = item.trend?.lastRealizedMonth ?? null;
 
   return (
     <tr className="group">
@@ -50,6 +56,14 @@ const CurveRow = memo(function CurveRow({
             ? `${item.actual.source} · V${item.actual.version}`
             : `${item.parametric.name} · V${item.parametric.version}`}
         </p>
+        {item.trend && (
+          <p
+            className="max-w-44 truncate text-xs text-info"
+            title={`Realizado até ${formatMonth(item.trend.lastRealizedMonth)}; depois, tendência: ${formatPercent(item.trend.planWeight, 0)} do replanejado + ${formatPercent(ONE_MINUS(item.trend.planWeight), 0)} do ritmo médio dos últimos ${item.trend.windowMonths} meses.`}
+          >
+            Tendência · ritmo {formatPercent(item.trend.averagePace, 1)}/mês
+          </p>
+        )}
       </td>
       <td className={cn(cellBase, 'text-right tabular group-hover:bg-ink-50')}>
         {formatDate(item.startDate)}
@@ -67,6 +81,7 @@ const CurveRow = memo(function CurveRow({
         const c = cells.get(m.month);
         const isRef = m.month === referenceMonth;
         const past = c && m.month <= referenceMonth;
+        const isTrend = c && trendFrom !== null && m.month > trendFrom;
         return (
           <td
             key={m.month}
@@ -74,7 +89,8 @@ const CurveRow = memo(function CurveRow({
               cellBase,
               'text-right tabular group-hover:bg-ink-50',
               isRef && 'bg-cell-current-period/60',
-              c && own && 'text-success',
+              c && own && !isTrend && 'text-success',
+              isTrend && 'italic text-info',
               c && !own && (past ? 'text-text' : 'text-text-muted'),
             )}
           >

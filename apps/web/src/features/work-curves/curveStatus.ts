@@ -9,7 +9,7 @@ export const CURVE_STATUS: Record<WorkCurveStatus, { label: string; hint: string
   },
   STARTED_ACTUAL: {
     label: 'Curva própria',
-    hint: 'Obra iniciada: usa a curva própria da obra (planilha ou API).',
+    hint: 'Obra iniciada: realizado da API até o mês atual e tendência nos meses seguintes (sem realizado: replanejado da obra).',
     tone: 'success',
   },
   STARTED_AWAITING_ACTUAL: {

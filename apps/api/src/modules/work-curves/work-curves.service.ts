@@ -36,6 +36,7 @@ import { notFound } from '../../utils/errors.js';
 import {
   generateProjection,
   manualFromValues,
+  projectionNeedsRecalc,
   resolveWorkCurve,
 } from '../projections/projections.service.js';
 
@@ -148,6 +149,18 @@ export function createWorkCurvesService({ db }: AppDeps) {
   }
 
   return {
+    /**
+     * Applies the curve in force when the work's projection became outdated (e.g. a new
+     * "Realizado Acumulado" moved the trend). Returns null when nothing had to change.
+     */
+    async refreshWork(tx: Db, work: WorkRow, actor: Actor, reason: string) {
+      const current = await projectionsRepository.findCurrent(tx, work.id);
+      if (!current || current.projection.isStale) return null;
+      const { effective, actual } = await resolveWorkCurve(tx, work);
+      if (!projectionNeedsRecalc(current.projection, effective, actual)) return null;
+      return applyCurveInForce(tx, work, actor, reason);
+    },
+
     async getActualCurve(workId: string): Promise<ActualCurveStateDto> {
       const work = await loadWork(db, workId);
       const [current, versions] = await Promise.all([
@@ -263,6 +276,7 @@ export function createWorkCurvesService({ db }: AppDeps) {
             version: work.curveVersion,
           },
           actual: e.actual ? toVersionDto(e.actual, null) : null,
+          trend: effective.trend,
           physicalAccumulated: upTo?.cumulative ?? '0.00000000',
           cells: cells.map((c) => ({
             month: c.month,

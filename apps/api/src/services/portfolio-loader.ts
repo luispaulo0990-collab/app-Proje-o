@@ -4,6 +4,10 @@ import {
   actualCurvesRepository,
   type ActualCurveWithPoints,
 } from '../database/repositories/actual-curves.repository.js';
+import {
+  progressIndicatorsRepository,
+  toProgressEntry,
+} from '../database/repositories/consolidated-inputs.repository.js';
 import { curvesRepository } from '../database/repositories/curves.repository.js';
 import {
   projectionsRepository,
@@ -42,13 +46,14 @@ export async function loadPortfolio(
 ): Promise<PortfolioEntry[]> {
   const works = await worksRepository.listAll(db, filter);
   const ids = works.map((w) => w.work.id);
-  const [parametricByVersion, actualByWork, projectionByWork] = await Promise.all([
+  const [parametricByVersion, actualByWork, projectionByWork, realizedByWork] = await Promise.all([
     curvesRepository.getPointsByVersions(
       db,
       works.map((w) => w.work.curveVersionId),
     ),
     actualCurvesRepository.findCurrentByWorks(db, ids),
     projectionsRepository.findCurrentByWorks(db, ids),
+    progressIndicatorsRepository.listByWorks(db, ids),
   ]);
   const today = currentMonth();
 
@@ -56,7 +61,8 @@ export async function loadPortfolio(
     works.map(async (w) => {
       const parametric = parametricByVersion.get(w.work.curveVersionId) ?? [];
       const actual = actualByWork.get(w.work.id) ?? null;
-      const preloaded = { parametric, actual };
+      const realized = (realizedByWork.get(w.work.id) ?? []).map(toProgressEntry);
+      const preloaded = { parametric, actual, realized };
       const { effective } = await resolveWorkCurve(db, w.work, referenceMonth, preloaded);
       const inForce =
         referenceMonth === today

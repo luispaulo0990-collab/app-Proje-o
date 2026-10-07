@@ -50,6 +50,15 @@ export {
   type WorkCurveStatus,
 } from './work-curve.js';
 export {
+  buildTrendCurve,
+  curveFingerprint,
+  TREND_PLAN_WEIGHT,
+  TREND_WINDOW_MONTHS,
+  type RealizedEntry,
+  type TrendCurve,
+  type TrendInfo,
+} from './trend-curve.js';
+export {
   buildConsolidatedPanel,
   type ConsolidatedMonth,
   type ConsolidatedPanel,
