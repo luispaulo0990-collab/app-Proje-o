@@ -1,7 +1,6 @@
 import type {
   ActualCurveBody,
   ActualCurveStateDto,
-  AportesDto,
   AuditLogDto,
   ConsolidatedDto,
   FeeIssuanceBody,
@@ -124,11 +123,6 @@ export const portfolioApi = {
     api.get<ConsolidatedDto>('/portfolio/consolidated', { ...filters }),
   progress: (workId: string) =>
     api.get<ProgressIndicatorsDto>(`/works/${workId}/progress-indicators`),
-};
-
-/** Contributions up to today (Joy+ transfers and investor receipts, read from SharePoint). */
-export const aportesApi = {
-  get: () => api.get<AportesDto>('/aportes'),
 };
 
 /** Fee inputs of the Consolidado. Months travel as `AAAA-MM-01`. */

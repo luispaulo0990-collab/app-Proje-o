@@ -80,10 +80,6 @@ export const router = createBrowserRouter([
             lazy: page(() => import('@/features/portfolio/ConsolidatedPage'), 'ConsolidatedPage'),
           },
           {
-            path: '/aportes',
-            lazy: page(() => import('@/features/aportes/AportesPage'), 'AportesPage'),
-          },
-          {
             path: '/curvas-obras',
             lazy: page(() => import('@/features/work-curves/WorkCurvesPage'), 'WorkCurvesPage'),
           },

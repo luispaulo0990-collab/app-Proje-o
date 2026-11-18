@@ -85,8 +85,6 @@ const envSchema = z
     MS_GRAPH_PROJECTED_RESULT_COLUMN: z.string().trim().default('Resultado Projetado Obra'),
     /** Value of the "Item" column that holds the work totals. */
     MS_GRAPH_ECONOMICO_TOTAL_ITEM: z.string().trim().default('Geral'),
-    /** "BD´s_JOY_EVANS.xlsx" (same drive) — tables "Recebidas" and "Transferências Bancarias". */
-    MS_GRAPH_APORTES_ITEM_ID: z.string().trim().default('01UQIHIUUULNCLXTBFYFBJU2OHULC6J4JV'),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().int().default(465),
     SMTP_USER: z.string().optional(),
@@ -162,8 +160,6 @@ export interface GraphConfig {
     projectedResultColumn: string;
     totalItem: string;
   } | null;
-  /** Workbook of the "Aportes" screen (same drive). */
-  aportesItemId: string;
 }
 
 export interface IntegrationKey {
@@ -234,7 +230,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
                   totalItem: env.MS_GRAPH_ECONOMICO_TOTAL_ITEM,
                 }
               : null,
-            aportesItemId: env.MS_GRAPH_APORTES_ITEM_ID,
           }
         : null,
     integrationKeys: splitList(env.INTEGRATION_API_KEYS).map((entry) => {
