@@ -15,6 +15,7 @@ import {
 import { z } from 'zod';
 import type { Env } from './config/env.js';
 import type { Database } from './database/client.js';
+import { aportesRoutes } from './modules/aportes/aportes.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { JwtService } from './modules/auth/jwt.js';
 import { createSupabaseAuthClient, type SupabaseAuthClient } from './modules/auth/supabase-auth.js';
@@ -177,6 +178,7 @@ export async function buildApp({
       await v1.register(inccIndicesRoutes, { prefix: '/incc-indices' });
       await v1.register(workCurvesRoutes, { prefix: '/work-curves' });
       await v1.register(portfolioRoutes, { prefix: '/portfolio' });
+      await v1.register(aportesRoutes, { prefix: '/aportes' });
       await v1.register(integrationsRoutes, {
         prefix: '/integrations',
         ...(workCurveProvider !== undefined ? { provider: workCurveProvider } : {}),

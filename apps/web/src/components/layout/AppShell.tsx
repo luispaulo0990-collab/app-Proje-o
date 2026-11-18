@@ -34,6 +34,9 @@ export function AppShell() {
             <NavLink to="/curvas-obras" className={link}>
               Curvas das obras
             </NavLink>
+            <NavLink to="/aportes" className={link}>
+              Aportes
+            </NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-3">
             {user && (

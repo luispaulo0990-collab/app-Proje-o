@@ -80,7 +80,7 @@ export class GraphEconomicProvider implements EconomicIndicatorProvider {
 /** One client (and one cached token) per environment and fetch implementation. */
 const clients = new WeakMap<Env, Map<typeof fetch | undefined, GraphClient>>();
 
-function graphClientFromEnv(env: Env, fetchImpl?: typeof fetch): GraphClient | null {
+export function graphClientFromEnv(env: Env, fetchImpl?: typeof fetch): GraphClient | null {
   const g = env.graph;
   if (!g) return null;
   const byFetch = clients.get(env) ?? new Map<typeof fetch | undefined, GraphClient>();

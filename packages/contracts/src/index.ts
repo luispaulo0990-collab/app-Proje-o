@@ -7,3 +7,4 @@ export * from './work-curves.js';
 export * from './fees.js';
 export * from './portfolio.js';
 export * from './integrations.js';
+export * from './aportes.js';
